@@ -56,7 +56,8 @@ public class MySQLBasedQueue<E> extends AbstractBlockingQueue<E> {
 					+ "WHERE acquired IS NULL AND queue_name = ? "
 					+ "ORDER BY id ASC " + "LIMIT 1; ",
 
-			"SELECT value FROM queue WHERE id = @update_id" };
+			"SELECT value FROM queue WHERE id = @update_id"
+	};
 
 	final static String cleanupQuery = "DELETE FROM queue "
 			+ "WHERE acquired IS NOT NULL " + "   AND queue_name = ? "
@@ -82,7 +83,7 @@ public class MySQLBasedQueue<E> extends AbstractBlockingQueue<E> {
 	 * @param ds
 	 * @param queueName
 	 * @param type
-	 * @param me The name of this node, for storing in the database table
+	 * @param me        The name of this node, for storing in the database table
 	 */
 	public MySQLBasedQueue(DataSource ds, String queueName, Class<E> type, String me) {
 		this(ds, queueName, me);
