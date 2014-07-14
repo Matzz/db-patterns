@@ -21,15 +21,19 @@ import net.bramp.serializator.Serializator;
 /**
  * A queue backed by MySQL
  * <p/>
- * CREATE TABLE queue ( id INT UNSIGNED NOT NULL AUTO_INCREMENT, queue_name
- * VARCHAR(255) NOT NULL, -- Queue name inserted TIMESTAMP NOT NULL, -- Time the
- * row was inserted inserted_by VARCHAR(255) NOT NULL, -- and by who acquired
- * TIMESTAMP NULL, -- Time the row was acquired acquired_by VARCHAR(255) NULL,
- * -- and by who value BLOB NOT NULL, -- The actual data PRIMARY KEY (id) )
- * ENGINE=INNODB DEFAULT CHARSET=UTF8;
+ * CREATE TABLE queue (
+ *     id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+ *     queue_name  VARCHAR(255) NOT NULL,    -- Queue name
+ *     inserted    TIMESTAMP NOT NULL,      -- Time the row was inserted
+ *     inserted_by VARCHAR(255) NOT NULL,    -- and by who
+ *     acquired    TIMESTAMP NULL,          -- Time the row was acquired
+ *     acquired_by VARCHAR(255) NULL,        -- and by who
+ *     value       BLOB NOT NULL,           -- The actual data
+ *     PRIMARY KEY (id)
+ * ) ENGINE=INNODB DEFAULT CHARSET=UTF8;
  * <p/>
  * TODO Create efficient drainTo
- * 
+ *
  * @param <E>
  * @author bramp
  */
@@ -67,8 +71,8 @@ public class MySQLBasedQueue<E> extends AbstractBlockingQueue<E> {
 	final DataSource ds;
 	final String queueName;
 	
-	private Class<E> type = null;
-	private Serializator<E> serializator = null;
+	protected Class<E> type = null;
+	protected Serializator<E> serializator = null;
 
 	final Condition condition;
 
@@ -235,8 +239,7 @@ public class MySQLBasedQueue<E> extends AbstractBlockingQueue<E> {
 	 */
 	public E poll(long timeout, TimeUnit unit) throws InterruptedException {
 
-		final long deadlineMillis = System.currentTimeMillis()
-				+ unit.toMillis(timeout);
+		final long deadlineMillis = System.currentTimeMillis() + unit.toMillis(timeout);
 		final Date deadline = new Date(deadlineMillis);
 
 		E head = null;
@@ -249,10 +252,8 @@ public class MySQLBasedQueue<E> extends AbstractBlockingQueue<E> {
 				break;
 
 			// Block until we are woken, or deadline
-			// Because we don't have a distributed lock around this condition,
-			// there is a race condition
-			// whereby we might miss a notify(). However, we can somewhat
-			// mitigate the problem, by using
+			// Because we don't have a distributed lock around this condition, there is a race condition
+			// whereby we might miss a notify(). However, we can somewhat mitigate the problem, by using
 			// this in a polling fashion
 			stillWaiting = condition.awaitUntil(deadline);
 		}
