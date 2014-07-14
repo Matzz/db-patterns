@@ -137,4 +137,16 @@ abstract class AbstractBlockingQueue<E> implements BlockingQueue<E> {
 	public boolean retainAll(Collection<?> c) {
 		throw new UnsupportedOperationException();
 	}
+
+	protected abstract String getAddQuery();
+
+	protected abstract String getPeekQuery();
+
+	protected abstract String[] getPollQuery();
+
+	protected abstract String getSizeQuery();
+
+	protected abstract String getCleanupQuery();
+	
+	protected abstract String getCleanupAllQuery();
 }
