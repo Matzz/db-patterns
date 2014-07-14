@@ -78,6 +78,35 @@ public class MySQLBasedDelayQueueTests {
 		assertEmpty();
 	}
 	
+	@Test
+	public void nonBlockingPeekTest() throws IOException, InterruptedException {
+		assertEmpty();
+		long s = 2;
+		DelayedString a = new DelayedString("A", s);
+		assertTrue( queue.add(a) );
+		assertEquals("Queue should contain one item", 1, queue.size());
+		assertNull("Queue head should be null", queue.peek());
+		Thread.sleep(s*2*1000l);
+		assertEquals("Queue head should be null", a, queue.peek());
+	}
+
+	@Test(timeout=10*1000)
+	public void delayedPollBlockingTest() throws IOException, InterruptedException, SQLException {
+		assertEmpty();
+		long s = 2;
+		DelayedString a = new DelayedString("A", s);
+		
+		assertTrue( queue.add(a) );
+
+		assertNull("Queue head should be null", queue.peek());
+		
+		Thread.sleep(s*2*1000l);
+		DelayedString ds = queue.poll();
+		
+		assertEquals("Queue head should be null", a, ds);
+		assertEmpty();
+	}
+	
 	@Test(timeout=1000)
 	public void pollBlockingTest() throws InterruptedException {
 		assertEmpty();
@@ -85,7 +114,7 @@ public class MySQLBasedDelayQueueTests {
 		long wait = WAIT_FOR_TIMING_TEST;
 
 		long now = System.currentTimeMillis();
-		String ret = queue.poll(wait, TimeUnit.MILLISECONDS).get();
+		DelayedString ret = queue.poll(wait, TimeUnit.MILLISECONDS);
 		long duration = System.currentTimeMillis() - now;
 
 		assertNull("poll timed out", ret);
@@ -102,11 +131,15 @@ public class MySQLBasedDelayQueueTests {
 		
 		private String str;
 		private long time;
-		private transient TimeUnit unit = TimeUnit.NANOSECONDS;
+		private transient TimeUnit unit = TimeUnit.SECONDS;
 		
 		public DelayedString(String str, long seconds) {
 			this.str = str;
-			this.time = seconds + System.nanoTime();
+			this.time = seconds + nowInSeconds();
+		}
+		
+		public String get() {
+			return str;
 		}
 
 		@Override
@@ -114,8 +147,15 @@ public class MySQLBasedDelayQueueTests {
 			Long l = o.getDelay(unit);
 			return l.compareTo(this.time);
 		}
+
 		
-		public boolean equalsTo(Delayed o) {
+		@Override
+		public long getDelay(TimeUnit unit) {
+			return unit.convert(time - nowInSeconds(), unit);
+		}
+
+		@Override
+		public boolean equals(Object o) {
 			if(o instanceof DelayedString) {
 				DelayedString v = (DelayedString) o;
 				return get().equals(v.get());
@@ -125,14 +165,13 @@ public class MySQLBasedDelayQueueTests {
 			}
 		}
 		
-
 		@Override
-		public long getDelay(TimeUnit unit) {
-			return unit.convert(time - System.nanoTime(), unit);
+		public int hashCode() {
+			return get().hashCode();
 		}
 		
-		public String get() {
-			return str;
+		private long nowInSeconds() {
+			return System.currentTimeMillis()/1000;
 		}
 	}
 }

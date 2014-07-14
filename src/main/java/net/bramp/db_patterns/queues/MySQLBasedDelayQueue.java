@@ -42,7 +42,7 @@ public class MySQLBasedDelayQueue<E extends Delayed> extends MySQLBasedQueue<E> 
 
 
 	final static protected String delayedAddQuery  = "INSERT INTO queue (queue_name, inserted, inserted_by, delayed_to, value) values (?, now(), ?, DATE_ADD(NOW(), INTERVAL ? SECOND), ?)";
-	final static protected String delayedPeekQuery = "SELECT value FROM queue WHERE acquired IS NULL AND (delayed_to<=now() OR delayed_to is null) AND queue_name = ?  ORDER BY id ASC LIMIT 1";
+	final static protected String delayedPeekQuery = "SELECT value FROM queue WHERE acquired IS NULL AND (delayed_to<=NOW() OR delayed_to is null) AND queue_name = ?  ORDER BY id ASC LIMIT 1";
 	final static String delayedPollQuery[] = {
 		"SET @update_id := -1; ",
 		"UPDATE queue SET " +
@@ -51,7 +51,7 @@ public class MySQLBasedDelayQueue<E extends Delayed> extends MySQLBasedQueue<E> 
 				"   acquired_by = ? " +
 				"WHERE "+
 				"acquired IS NULL AND " +
-				"(delayed_to<=now() OR delayed_to is null) AND "+
+				"(delayed_to<=NOW() OR delayed_to is null) AND "+
 				"queue_name = ? " +
 				"ORDER BY id ASC " +
 				"LIMIT 1; ",
@@ -110,16 +110,6 @@ public class MySQLBasedDelayQueue<E extends Delayed> extends MySQLBasedQueue<E> 
 
 	@Override
 	protected String[] getPollQuery() {
-		return pollQuery;
-	}
-
-	@Override
-	protected String getCleanupQuery() {
-		return cleanupQuery;
-	}
-
-	@Override
-	protected String getCleanupAllQuery() {
-		return cleanupAllQuery;
+		return delayedPollQuery;
 	}
 }
