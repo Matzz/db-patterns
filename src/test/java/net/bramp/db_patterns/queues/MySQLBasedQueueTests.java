@@ -34,7 +34,7 @@ public class MySQLBasedQueueTests {
 	@After
 	public void cleanupDatabase() throws SQLException {
 		queue.clear();
-		queue.cleanupAll();
+		queue.cleanupAll(10);
 		assertEmpty();
 	}
 	
