@@ -22,25 +22,27 @@ import org.junit.Test;
 public class MySQLBasedDelayQueueTests {
 
 	final static long WAIT_FOR_TIMING_TEST = 300; // in ms
-	
+
+	private String queueTable;
 	private String queueName;
 	private DataSource ds;
 	
-	private MySQLBasedQueue<DelayedString> queue;
+	private MySQLBasedDelayQueue<DelayedString> queue;
 
 	@Before
 	public void setup() {
 		// Different queue name for each test (to avoid test clashes)
+		queueTable = "queue";
 		queueName = java.util.UUID.randomUUID().toString();
 		ds = DatabaseUtils.createDataSource();
 
-		queue = new MySQLBasedDelayQueue<DelayedString>(ds, queueName, new DefaultSerializator<DelayedString>(), "test");
+		queue = new MySQLBasedDelayQueue<DelayedString>(ds, queueTable, queueName, new DefaultSerializator<DelayedString>(), "test");
 	}
 
 	@After
 	public void cleanupDatabase() throws SQLException {
 		queue.clear();
-		queue.cleanupAll();
+		queue.cleanupAll(0);
 		assertEmpty();
 	}
 	
@@ -90,22 +92,21 @@ public class MySQLBasedDelayQueueTests {
 		assertEquals("Queue head should be null", a, queue.peek());
 	}
 
-	@Test(timeout=10*1000)
-	public void delayedPollBlockingTest() throws IOException, InterruptedException, SQLException {
-		assertEmpty();
-		long s = 2;
-		DelayedString a = new DelayedString("A", s);
-		
-		assertTrue( queue.add(a) );
-
-		assertNull("Queue head should be null", queue.peek());
-		
-		Thread.sleep(s*2*1000l);
-		DelayedString ds = queue.poll();
-		
-		assertEquals("Queue head should be null", a, ds);
-		assertEmpty();
-	}
+//	@Test(timeout=10000)
+//	public void delayedPollBlockingTest() throws IOException, InterruptedException, SQLException {
+//		assertEmpty();
+//		long s = 2;
+//		DelayedString a = new DelayedString("A", s);
+//		
+//		assertTrue( queue.add(a) );
+//		assertNull("Queue head should be null", queue.peek());
+//
+//
+//		DelayedString ds = queue.poll(s*2, TimeUnit.SECONDS);
+//		
+//		assertEquals("Queue head should be object", a, ds);
+//		assertEmpty();
+//	}
 	
 	@Test(timeout=1000)
 	public void pollBlockingTest() throws InterruptedException {
