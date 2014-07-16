@@ -3,11 +3,7 @@ package net.bramp.db_patterns.queues;
 import static org.junit.Assert.*;
 
 import java.io.IOException;
-import java.io.ObjectOutputStream;
-import java.io.OutputStream;
-import java.io.Serializable;
 import java.sql.SQLException;
-import java.util.concurrent.Delayed;
 import java.util.concurrent.TimeUnit;
 
 import javax.sql.DataSource;
@@ -44,6 +40,7 @@ public class MySQLBasedDelayQueueTests {
 		queue.clear();
 		queue.cleanupAll(0);
 		assertEmpty();
+		ds.getConnection().close();
 	}
 	
 	protected void assertEmpty() {
@@ -52,127 +49,79 @@ public class MySQLBasedDelayQueueTests {
 		assertNull("Queue head should be null", queue.peek());
 	}
 	
-	@Test
-	public void test() throws IOException {
-		
-		assertEmpty();
-
-		DelayedString a = new DelayedString("A", 0);
-		DelayedString b = new DelayedString("B", 0);
-		
-		assertTrue( queue.add(new DelayedString("A", 0)) );
-
-		assertEquals("Queue should contain one item", 1, queue.size());
-		assertEquals("Queue head should be A", a, queue.peek());
-
-		assertTrue( queue.add(b) );
-
-		assertEquals("Queue should start empty", 2, queue.size());
-		assertEquals("Queue head should be A", a, queue.peek());
-
-		assertEquals("Queue head should be A", a, queue.poll());
-
-		assertEquals("Queue should start empty", 1, queue.size());
-		assertEquals("Queue head should be B", b, queue.peek());
-		
-		assertEquals("Queue head should be B", b, queue.poll());
-
-		assertEmpty();
+	protected void assertBetween(long diff, long min, long max) {
+		assertTrue("Invalid range "+min+" <= "+diff+" <= "+max, min <= diff && diff <= max);
 	}
+
+	@Test
+	public void getClosestDelayTest() throws SQLException {
+		long d, queueDelay;
+		
+		assertEmpty();
+		assertEquals(0, queue.getClosestDelay());
+		d = 20;
+		queue.add(new DelayedString("A", d));
+		queueDelay = queue.getClosestDelay();
+		assertTrue("Closest delay should be close to added delay ["+d+"<="+(queueDelay+2)+"]", d <= queueDelay+2);
+		assertTrue("Closest delay should be less than last added ["+d+"<="+queueDelay+"]", queueDelay <= d);
+		
+		queue.clear();
+		d = 0;
+		queue.add(new DelayedString("A", d));
+		assertTrue(queue.getClosestDelay()<=d);
+	}
+	
 	
 	@Test
 	public void nonBlockingPeekTest() throws IOException, InterruptedException {
 		assertEmpty();
-		long s = 2;
-		DelayedString a = new DelayedString("A", s);
+		long delayS = 2;
+		DelayedString a = new DelayedString("A", delayS);
 		assertTrue( queue.add(a) );
 		assertEquals("Queue should contain one item", 1, queue.size());
 		assertNull("Queue head should be null", queue.peek());
-		Thread.sleep(s*2*1000l);
-		assertEquals("Queue head should be null", a, queue.peek());
+		Thread.sleep(delayS*2*1000l);
+		assertEquals("Queue head should not be expired task", a, queue.peek());
 	}
-
-//	@Test(timeout=10000)
-//	public void delayedPollBlockingTest() throws IOException, InterruptedException, SQLException {
-//		assertEmpty();
-//		long s = 2;
-//		DelayedString a = new DelayedString("A", s);
-//		
-//		assertTrue( queue.add(a) );
-//		assertNull("Queue head should be null", queue.peek());
-//
-//
-//		DelayedString ds = queue.poll(s*2, TimeUnit.SECONDS);
-//		
-//		assertEquals("Queue head should be object", a, ds);
-//		assertEmpty();
-//	}
 	
-	@Test(timeout=1000)
-	public void pollBlockingTest() throws InterruptedException {
+
+	@Test(timeout=10000)
+	public void delayedBlockingPollTest() throws IOException, InterruptedException, SQLException {
 		assertEmpty();
+		long s = 2;
+		DelayedString a = new DelayedString("A", s);
 
-		long wait = WAIT_FOR_TIMING_TEST;
+		assertTrue( queue.add(a) );
+		assertNull("Queue head should be null", queue.peek());
 
-		long now = System.currentTimeMillis();
-		DelayedString ret = queue.poll(wait, TimeUnit.MILLISECONDS);
-		long duration = System.currentTimeMillis() - now;
+		DelayedString ds = queue.poll(s*2, TimeUnit.SECONDS);
 
-		assertNull("poll timed out", ret);
-
-		assertTrue("We waited less than " + wait + "ms (actual:" + duration + ")", duration >= wait);
-		assertTrue("We waited more than " + (wait*1.2) + "ms (actual:" + duration + ")", duration < wait * 1.2);
-
+		assertEquals("Queue head should be object", a, ds);
 		assertEmpty();
 	}
 	
-	protected static class DelayedString implements Delayed, Serializable {
 
-		private static final long serialVersionUID = -574306132564575817L;
+	@Test(timeout=10000)
+	public void multiplePoolTest() throws IOException, InterruptedException, SQLException {
+		assertEmpty();
+		long delay = 2;
 		
-		private String str;
-		private long time;
-		private transient TimeUnit unit = TimeUnit.SECONDS;
+		long tsStart = System.currentTimeMillis();
+		char[] names = {'A', 'B', 'C', 'D'};
 		
-		public DelayedString(String str, long seconds) {
-			this.str = str;
-			this.time = seconds + nowInSeconds();
-		}
-		
-		public String get() {
-			return str;
+		int d = 0;
+		for(char name : names) {
+			assertTrue( queue.add(new DelayedString(String.valueOf(name), delay+d)) );
+			d += 2;
 		}
 
-		@Override
-		public int compareTo(Delayed o) {
-			Long l = o.getDelay(unit);
-			return l.compareTo(this.time);
+		for(char name : names) {
+			assertEquals("First str should be "+name, String.valueOf(name), queue.poll(delay+2, TimeUnit.SECONDS).get());
+			assertBetween(System.currentTimeMillis() - tsStart, delay*1000-100, (delay+1)*1000+100);
+			tsStart = System.currentTimeMillis();
 		}
 
-		
-		@Override
-		public long getDelay(TimeUnit unit) {
-			return unit.convert(time - nowInSeconds(), unit);
-		}
-
-		@Override
-		public boolean equals(Object o) {
-			if(o instanceof DelayedString) {
-				DelayedString v = (DelayedString) o;
-				return get().equals(v.get());
-			}
-			else {
-				return false;
-			}
-		}
-		
-		@Override
-		public int hashCode() {
-			return get().hashCode();
-		}
-		
-		private long nowInSeconds() {
-			return System.currentTimeMillis()/1000;
-		}
+		assertEmpty();
 	}
+	
 }

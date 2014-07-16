@@ -12,14 +12,17 @@ import java.util.concurrent.TimeUnit;
  */
 abstract class AbstractBlockingQueue<E> implements BlockingQueue<E> {
 
+	@Override
 	public boolean isEmpty() {
 		return size() == 0;
 	}
 
+	@Override
 	public boolean offer(E e) {
 		return add(e);
 	}
 	
+	@Override
 	public E element() {
 		E head = peek();
 		if (head == null)
@@ -27,6 +30,7 @@ abstract class AbstractBlockingQueue<E> implements BlockingQueue<E> {
 		return head;
 	}
 
+	@Override
 	public E remove() {
 		E head = poll();
 		if (head == null)
@@ -37,6 +41,7 @@ abstract class AbstractBlockingQueue<E> implements BlockingQueue<E> {
 	/**
 	 * Blocks
 	 */
+	@Override
 	public E take() throws InterruptedException {
 		// We loop around trying to get a item, blocking at most a minute at
 		// a time this allows us to be interrupted
@@ -53,6 +58,7 @@ abstract class AbstractBlockingQueue<E> implements BlockingQueue<E> {
 	/**
 	 * Blocks
 	 */
+	@Override
 	public void put(E e) throws InterruptedException {
 		add(e);
 	}
@@ -60,6 +66,7 @@ abstract class AbstractBlockingQueue<E> implements BlockingQueue<E> {
 	/**
 	 * No blocking
 	 */
+	@Override
 	public int drainTo(Collection<? super E> c) {
 		return drainTo(c, Integer.MAX_VALUE);
 	}
@@ -67,6 +74,7 @@ abstract class AbstractBlockingQueue<E> implements BlockingQueue<E> {
 	/**
 	 * No blocking
 	 */
+	@Override
 	public int drainTo(Collection<? super E> c, int maxElements) {
 		if (c == this)
 			throw new IllegalArgumentException("Draining to self is not supported");
@@ -83,18 +91,13 @@ abstract class AbstractBlockingQueue<E> implements BlockingQueue<E> {
 
 		return maxElements - count;
 	}
-
-	public void clear() {
-		// Lazy! just keep poll'ng them off
-		while (poll() != null) {
-			// Nothing
-		}
-	}
 	
+	@Override
 	public int remainingCapacity() {
 		return Integer.MAX_VALUE;
 	}
 
+	@Override
 	public boolean offer(E e, long timeout, TimeUnit unit) throws InterruptedException {
 		// Right now, we have no concept of a full queue, so we don't block on insert
 		return offer(e);
@@ -102,37 +105,46 @@ abstract class AbstractBlockingQueue<E> implements BlockingQueue<E> {
 
 	////// Nothing supported below
 
+	@Override
 	public boolean contains(Object o) {
 		throw new UnsupportedOperationException();
 	}
 
+	@Override
 	public Iterator<E> iterator() {
 		throw new UnsupportedOperationException();
 	}
 
+	@Override
 	public Object[] toArray() {
 		throw new UnsupportedOperationException();	}
 
+	@Override
 	public <T> T[] toArray(T[] a) {
 		throw new UnsupportedOperationException();
 	}
 
+	@Override
 	public boolean remove(Object o) {
 		throw new UnsupportedOperationException();
 	}
 
+	@Override
 	public boolean containsAll(Collection<?> c) {
 		throw new UnsupportedOperationException();
 	}
 
+	@Override
 	public boolean addAll(Collection<? extends E> c) {
 		throw new UnsupportedOperationException();
 	}
 
+	@Override
 	public boolean removeAll(Collection<?> c) {
 		throw new UnsupportedOperationException();
 	}
 
+	@Override
 	public boolean retainAll(Collection<?> c) {
 		throw new UnsupportedOperationException();
 	}

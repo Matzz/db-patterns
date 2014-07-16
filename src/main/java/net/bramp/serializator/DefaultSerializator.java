@@ -20,6 +20,7 @@ public class DefaultSerializator<E> implements Serializator<E> {
 					array = out.toByteArray();
 				} catch (IOException e) {
 					objectOut.close();
+					throw e;
 				}
 			} finally {
 				out.close();

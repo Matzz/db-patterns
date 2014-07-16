@@ -1,9 +1,17 @@
 package net.bramp.db_patterns.queues;
 
+import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.Delayed;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.sql.DataSource;
 
@@ -27,8 +35,8 @@ import net.bramp.serializator.Serializator;
  */
 public class MySQLBasedDelayQueue<E extends Delayed> extends
 		AbstractMySQLQueue<E> {
-
-	protected String closestDelayQuery = "SELECT min(delayed_to)-NOW() FROM " + tableNamePlaceholder
+	 
+	protected String closestDelayQuery = "SELECT min(TIME_TO_SEC(TIMEDIFF(delayed_to,NOW()))) FROM " + tableNamePlaceholder
 			+ " WHERE acquired IS NULL AND queue_name = ?";
 
 	protected String delayCondition = "AND (delayed_to<=NOW() OR delayed_to is null) ";
@@ -81,13 +89,66 @@ public class MySQLBasedDelayQueue<E extends Delayed> extends
 		setValueToStatment(s, 4, value);
 	}
 
-	@Override
-	protected void wakeupThread() {
-		condition.signal();
+	/**
+	 * 
+	 * @return delay in seconds
+	 * @throws SQLException
+	 */
+	protected long getClosestDelay() throws SQLException {
+		int minDelay = 0;
+		
+		String query = setTable(closestDelayQuery);
+		Connection c = ds.getConnection();
+		
+		PreparedStatement s = c.prepareStatement(query);
+		s.setString(1, queueName);
+		if (s.execute()) {
+			ResultSet rs = s.getResultSet();
+			if (rs != null && rs.next()) {
+				minDelay = rs.getInt(1);
+			}
+		}
+		return minDelay;
 	}
 
-	protected long getClosestDelay() {
-		return 1;
+	protected ScheduledExecutorService wakeupScheduler = Executors.newScheduledThreadPool(1);
+	protected ScheduledFuture<?> wakeupTask = null;
+	protected class WakeupTask implements Runnable {
+		@Override
+		public void run() {
+			condition.signal();
+			synchronized(wakeupScheduler) {
+				wakeupScheduler.schedule(new Runnable() {
+					@Override
+					public void run() {
+						wakeupThread();
+					}
+				}, 1, TimeUnit.SECONDS);
+			}
+		}
+	};
+	
+	@Override
+	protected void wakeupThread() {
+		synchronized (wakeupScheduler) {
+				long delaySeconds;
+				try {
+					delaySeconds = getClosestDelay();
+					if(delaySeconds<=0) {
+						delaySeconds = 1;
+					}
+				} catch (SQLException e) {
+					delaySeconds = 1;
+					e.printStackTrace();
+				}
+				if(wakeupTask!=null && wakeupTask.getDelay(TimeUnit.SECONDS)>delaySeconds) {
+					wakeupTask.cancel(false);
+				}
+				if(wakeupTask==null || wakeupTask.isDone() || wakeupTask.isCancelled()) {
+					wakeupTask = wakeupScheduler.schedule(new WakeupTask(), delaySeconds, TimeUnit.SECONDS);
+				}
+
+		}
 	}
 
 }

@@ -35,13 +35,16 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> {
 	protected String addQuery;
 	protected String peekQuery;
 	protected String[] pollQuery;
+
+	protected String clearQuery = "DELETE FROM " + tableNamePlaceholder
+			+ " WHERE queue_name = ? ";
 	
 	protected String cleanupQuery = "DELETE FROM " + tableNamePlaceholder
-			+ " " + "WHERE acquired IS NOT NULL " + " AND queue_name = ? "
+			+ " WHERE acquired IS NOT NULL " + " AND queue_name = ? "
 			+ " AND acquired < DATE_SUB(NOW(), INTERVAL ? DAY)";
 
 	protected String cleanupAllQuery = "DELETE FROM " + tableNamePlaceholder
-			+ " " + "WHERE acquired IS NOT NULL "
+			+ " WHERE acquired IS NOT NULL "
 			+ " AND acquired < DATE_SUB(NOW(), INTERVAL ? DAY)";
 
 	protected String sizeQuery = "SELECT COUNT(*) FROM queue WHERE acquired IS NULL AND queue_name = ?";
@@ -237,6 +240,25 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> {
 		return head;
 	}
 
+
+	@Override
+	public void clear() {
+		Connection c;
+		try {
+			c = ds.getConnection();
+			try {
+				CallableStatement s = c.prepareCall(getClearQuery());
+				s.setString(1, queueName);
+				s.execute();
+
+			} finally {
+				c.close();
+			}
+		} catch (SQLException e) {
+			throw new RuntimeException(e);
+		}
+	}
+	
 	/**
 	 * Legacy cleanupAll
 	 * 
@@ -338,6 +360,10 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> {
 
 	protected String getSizeQuery() {
 		return setTable(sizeQuery);
+	}
+	
+	protected String getClearQuery() {
+		return setTable(clearQuery);
 	}
 
 	protected String getCleanupQuery() {
