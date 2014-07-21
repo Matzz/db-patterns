@@ -81,6 +81,19 @@ A distributed MySQL backed Java DelayQueue
   
 ```
 
+Statuses
+-----------------
+MySQLBasedQueue, MySQLBasedDelayQueue implements StatusableQueue interface which enable seting queue item statuses. Statuses do not affect polling of items. They might be set at any time and to any value. They just provide convenient way of tracking item state.
+
+StatusableQueue brings such methods:
+```java
+	public ValueWithMetadata<E> pollWithMetadata();
+	public ValueWithMetadata<E> pollWithMetadata(long timeout, TimeUnit unit) throws InterruptedException;
+	public ValueWithMetadata<E> peekWithMetadata();
+	public void updateStatus(long id, String newStatus);
+	public String getStatus(long id);
+```
+ValueWithMetadata class contains item id in queue, status and item value.
 
 
 Build and Release
