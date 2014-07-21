@@ -20,8 +20,7 @@ import net.bramp.serializator.Serializator;
  * @param <E>
  * @author bramp
  */
-abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> {
-
+abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements StatusableQueue<E>, CleanableQueue {
 	protected String me;
 	protected DataSource ds;
 	protected String queueName;
@@ -33,6 +32,7 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> {
 
 	final static String tableNamePlaceholder = "%TABLE_NAME%";
 	protected String addQuery;
+
 	protected String peekQuery;
 	protected String[] pollQuery;
 
@@ -40,12 +40,20 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> {
 			+ " WHERE queue_name = ? ";
 	
 	protected String cleanupQuery = "DELETE FROM " + tableNamePlaceholder
-			+ " WHERE acquired IS NOT NULL " + " AND queue_name = ? "
+			+ " WHERE acquired IS NOT NULL "
+			+ " AND queue_name = ? "
 			+ " AND acquired < DATE_SUB(NOW(), INTERVAL ? DAY)";
 
 	protected String cleanupAllQuery = "DELETE FROM " + tableNamePlaceholder
 			+ " WHERE acquired IS NOT NULL "
 			+ " AND acquired < DATE_SUB(NOW(), INTERVAL ? DAY)";
+
+	protected String updateStatusQuery = "UPDATE "+tableNamePlaceholder
+						+" SET status = ? "
+						+ "WHERE id = ? "
+						+ "LIMIT 1; ";
+
+	protected String getStatusQuery = "SELECT status FROM queue WHERE id = ?";
 
 	protected String sizeQuery = "SELECT COUNT(*) FROM queue WHERE acquired IS NULL AND queue_name = ?";
 
@@ -53,9 +61,10 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> {
 	 * Creates a new MySQL backed queue. Store values using statement setObject.
 	 * 
 	 * @param ds
+	 * @param queueTableName queue table name in database
 	 * @param queueTableName
-	 * @param queueName
-	 * @param type
+	 * @param queueName queue name in database
+	 * @param type value primitive type. Used to store value in database if serializator is not defined.
 	 * @param me
 	 *            The name of this node, for storing in the database table
 	 */
@@ -69,11 +78,11 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> {
 	 * Creates a new MySQL backed queue. Store values using serializator and
 	 * setBytes.
 	 * 
-	 * @param ds
-	 * @param queueName
-	 * @param serializator
-	 * @param me
-	 *            The name of this node, for storing in the database table
+	 * @param ds datasource
+	 * @param queueTableName queue table name in database
+	 * @param queueName queue name in database
+	 * @param serializator used to store values
+	 * @param me The name of this node, for storing in the database table
 	 */
 	public AbstractMySQLQueue(DataSource ds, String queueTableName,
 			String queueName, Serializator<E> serializator, String me) {
@@ -90,6 +99,7 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> {
 		this.me = me;
 	}
 
+	@Override
 	public boolean add(E value) {
 		try {
 			Connection c = ds.getConnection();
@@ -113,10 +123,8 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> {
 		}
 	}
 
-	/**
-	 * No blocking
-	 */
-	public E peek() {
+	@Override
+	public ValueWithMetadata<E> peekWithMetadata() {
 		try {
 			Connection c = ds.getConnection();
 			try {
@@ -126,10 +134,12 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> {
 					if (s.execute()) {
 						ResultSet rs = s.getResultSet();
 						if (rs != null && rs.next()) {
-							return getValueFromResult(rs, 1);
+							return new ValueWithMetadata<E>(
+									rs.getLong(1),
+									rs.getString(2),
+									getValueFromResult(rs, 3));
 						}
 					}
-
 					return null;
 				} finally {
 					s.close();
@@ -144,10 +154,8 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> {
 		}
 	}
 
-	/**
-	 * No blocking
-	 */
-	public E poll() {
+	@Override
+	public ValueWithMetadata<E> pollWithMetadata() {
 		try {
 			Connection c = ds.getConnection();
 			String[] pollQuery = getPollQuery();
@@ -170,7 +178,10 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> {
 				if (s3.execute()) {
 					ResultSet rs = s3.getResultSet();
 					if (rs != null && rs.next()) {
-						return getValueFromResult(rs, 1);
+						return new ValueWithMetadata<E>(
+								rs.getLong(1),
+								rs.getString(2),
+								getValueFromResult(rs, 3));
 					}
 				}
 
@@ -186,6 +197,99 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> {
 		}
 	}
 
+	@Override
+	public ValueWithMetadata<E> pollWithMetadata(long timeout, TimeUnit unit) throws InterruptedException {
+
+		final long deadlineMillis = System.currentTimeMillis()
+				+ unit.toMillis(timeout);
+		final Date deadline = new Date(deadlineMillis);
+
+		ValueWithMetadata<E> head = null;
+		boolean stillWaiting = true;
+
+		while (stillWaiting) {
+			// Check if we can grab one
+			head = pollWithMetadata();
+			if (head != null)
+				break;
+
+			// Block until we are woken, or deadline
+			// Because we don't have a distributed lock around this condition,
+			// there is a race condition
+			// whereby we might miss a notify(). However, we can somewhat
+			// mitigate the problem, by using
+			// this in a polling fashion
+			stillWaiting = condition.awaitUntil(deadline);
+		}
+
+		return head;
+	}
+
+
+	@Override
+	public void updateStatus(long id, String newStatus) {
+		try {
+			Connection c = ds.getConnection();
+			String updateStatusQuery = getUpdateStatusQuery();
+			try {
+				CallableStatement s = c.prepareCall(updateStatusQuery);
+				s.setString(1, newStatus);
+				s.setLong(2, id);
+				s.execute();
+			} finally {
+				c.close();
+			}
+
+		} catch (SQLException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+
+	@Override
+	public String getStatus(long id) {
+		try {
+			Connection c = ds.getConnection();
+			String statusQuery = getStatusQuery();
+			try {
+				CallableStatement s = c.prepareCall(statusQuery);
+				s.setLong(1, id); // Acquired by me
+
+				if (s.execute()) {
+					ResultSet rs = s.getResultSet();
+					if (rs != null && rs.next()) {
+						return rs.getString(1);
+					}
+				}
+				return null;
+			} finally {
+				c.close();
+			}
+
+		} catch (SQLException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	@Override
+	public E peek() {
+		ValueWithMetadata<E> item = peekWithMetadata();
+		return item!=null ? item.value : null;
+	}
+
+	@Override
+	public E poll() {
+		ValueWithMetadata<E> item = pollWithMetadata();
+		return item!=null ? item.value : null;
+	}
+
+	@Override
+	public E poll(long timeout, TimeUnit unit) throws InterruptedException {
+		ValueWithMetadata<E> item = pollWithMetadata(timeout, unit);
+		return item!=null ? item.value : null;
+	}
+
+	@Override
 	public int size() {
 		try {
 			Connection c = ds.getConnection();
@@ -207,37 +311,6 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> {
 		} catch (SQLException e) {
 			throw new RuntimeException(e);
 		}
-	}
-
-	/**
-	 * Blocks until something is in the queue, up to timeout null if timeout
-	 * occurs
-	 */
-	public E poll(long timeout, TimeUnit unit) throws InterruptedException {
-
-		final long deadlineMillis = System.currentTimeMillis()
-				+ unit.toMillis(timeout);
-		final Date deadline = new Date(deadlineMillis);
-
-		E head = null;
-		boolean stillWaiting = true;
-
-		while (stillWaiting) {
-			// Check if we can grab one
-			head = poll();
-			if (head != null)
-				break;
-
-			// Block until we are woken, or deadline
-			// Because we don't have a distributed lock around this condition,
-			// there is a race condition
-			// whereby we might miss a notify(). However, we can somewhat
-			// mitigate the problem, by using
-			// this in a polling fashion
-			stillWaiting = condition.awaitUntil(deadline);
-		}
-
-		return head;
 	}
 
 
@@ -269,6 +342,18 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> {
 		cleanup(10);
 	}
 
+	/**
+	 * Legacy cleanupAll
+	 * 
+	 * @deprecated
+	 * @throws SQLException
+	 */
+	public void cleanupAll() throws SQLException {
+		cleanupAll(10);
+	}
+
+
+	@Override
 	public void cleanup(int days) throws SQLException {
 		Connection c = ds.getConnection();
 		try {
@@ -282,21 +367,8 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> {
 		}
 	}
 
-	/**
-	 * Legacy cleanupAll
-	 * 
-	 * @deprecated
-	 * @throws SQLException
-	 */
-	public void cleanupAll() throws SQLException {
-		cleanupAll(10);
-	}
 
-	/**
-	 * Cleans up all queues
-	 * 
-	 * @throws SQLException
-	 */
+	@Override
 	public void cleanupAll(int days) throws SQLException {
 		Connection c = ds.getConnection();
 		try {
@@ -309,29 +381,61 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> {
 		}
 	}
 
-	protected void setAddParameters(E value, PreparedStatement s) throws SQLException {
-	}
+	/**
+	 * Bind parameters to add query
+	 * @param value to add
+	 * @param statement
+	 * @throws SQLException
+	 */
+	abstract protected void setAddParameters(E value, PreparedStatement statement) throws SQLException;
 
+	/**
+	 * Binds table name to query
+	 * @param query
+	 * @return query with table name binded
+	 */
 	protected String setTable(String query) {
 		return query.replaceAll(tableNamePlaceholder, tableName);
 	}
 
+	/**
+	 * Escape table name to prevent SQL injection.
+	 * @param tableName
+	 * @return escaped against ` char
+	 */
 	protected String escapeTableName(String tableName) {
 		return "`" + tableName.replaceAll("`", "") + "`";
 	}
 
+	/**
+	 * Wakes up one thread.
+	 */
 	protected void wakeupThread() {
 		condition.signal();
 	}
 
+	/**
+	 * Get value from result set. Deserialize it if serializator defined otherwise getObject mehtod is used.
+	 * @param rs
+	 * @param index
+	 * @return
+	 * @throws SQLException
+	 */
 	protected E getValueFromResult(ResultSet rs, int index) throws SQLException {
 		if (serializator == null) {
-			return rs.getObject(1, type);
+			return rs.getObject(index, type);
 		} else {
 			return serializator.deserialize(rs.getBytes(index));
 		}
 	}
 
+	/**
+	 * Sets value to statement. If defined, serializator is used, otherwise setObject with type.
+	 * @param s
+	 * @param index
+	 * @param obj
+	 * @throws SQLException
+	 */
 	protected void setValueToStatment(PreparedStatement s, int index, E obj)
 			throws SQLException {
 		if (serializator == null) {
@@ -342,14 +446,26 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> {
 	}
 
 
+	/**
+	 * Returns sql query for add operation with binded table name
+	 * @return sql
+	 */
 	protected String getAddQuery() {
 		return setTable(addQuery);
 	}
-
+	
+	/**
+	 * Returns sql query for add operation with binded table name
+	 * @return sql
+	 */
 	protected String getPeekQuery() {
 		return setTable(peekQuery);
 	}
 
+	/**
+	 * Returns sql array for poll operation with binded table name
+	 * @return sql array
+	 */
 	protected String[] getPollQuery() {
 		String[] queries = new String[pollQuery.length];
 		for(int i=0; i<queries.length; i++) {
@@ -357,21 +473,52 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> {
 		}
 		return queries;
 	}
-
+	
+	/**
+	 * Returns sql for size operation with binded table name
+	 * @return sql array
+	 */
 	protected String getSizeQuery() {
 		return setTable(sizeQuery);
 	}
 	
+	/**
+	 * Returns sql for set status operation with binded table name
+	 * @return sql array
+	 */
+	protected String getUpdateStatusQuery() {
+		return setTable(updateStatusQuery);
+	}
+	
+	/**
+	 * Returns sql for get status operation with binded table name
+	 * @return sql array
+	 */
+	protected String getStatusQuery() {
+		return setTable(getStatusQuery);
+	}
+	
+	/**
+	 * Returns sql for clear operation with binded table name
+	 * @return sql array
+	 */
 	protected String getClearQuery() {
 		return setTable(clearQuery);
 	}
 
+	/**
+	 * Returns sql for cleanup operation with binded table name
+	 * @return sql array
+	 */
 	protected String getCleanupQuery() {
 		return setTable(cleanupQuery);
 	}
 
+	/**
+	 * Returns sql for cleanup all operation with binded table name
+	 * @return sql array
+	 */
 	protected String getCleanupAllQuery() {
 		return setTable(cleanupAllQuery);
 	}
-
 }

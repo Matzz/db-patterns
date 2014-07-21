@@ -3,13 +3,16 @@ package net.bramp.db_patterns.queues;
 import static org.junit.Assert.*;
 
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import javax.sql.DataSource;
 
 import net.bramp.db_patterns.DatabaseUtils;
+import net.bramp.db_patterns.queues.StatusableQueue.ValueWithMetadata;
 import net.bramp.serializator.DefaultSerializator;
 
 import org.junit.After;
@@ -100,6 +103,19 @@ public class AbstractMySQLBasedQueueTest {
 		assertEquals("Queue head should be B", b, queue.poll());
 
 		assertEmpty();
+	}
+
+	@Test
+	public void statusTest() {
+		assertEmpty();
+
+		Object a = valueFactory.apply("A");
+		assertTrue(queue.add(a));
+		ValueWithMetadata<Object> v = queue.peekWithMetadata();
+		queue.updateStatus(v.id, "Test1");
+		assertEquals(queue.getStatus(v.id), "Test1");
+		queue.updateStatus(v.id, "Test2");
+		assertEquals(queue.getStatus(v.id), "Test2");
 	}
 
 	/*

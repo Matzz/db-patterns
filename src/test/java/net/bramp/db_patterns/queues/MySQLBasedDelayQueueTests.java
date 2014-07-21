@@ -74,6 +74,7 @@ public class MySQLBasedDelayQueueTests {
 	
 	@Test
 	public void nonBlockingPeekTest() throws IOException, InterruptedException {
+
 		assertEmpty();
 		long delayS = 2;
 		DelayedString a = new DelayedString("A", delayS);

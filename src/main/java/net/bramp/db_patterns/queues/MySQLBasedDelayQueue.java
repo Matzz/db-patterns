@@ -4,14 +4,11 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.Timer;
-import java.util.TimerTask;
 import java.util.concurrent.Delayed;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.sql.DataSource;
 
@@ -19,15 +16,20 @@ import net.bramp.serializator.Serializator;
 
 /**
  * A queue backed by MySQL
- * 
- * CREATE TABLE queue ( id INT UNSIGNED NOT NULL AUTO_INCREMENT, queue_name
- * VARCHAR(255) NOT NULL, -- Queue name inserted TIMESTAMP NOT NULL, -- Time the
- * row was inserted inserted_by VARCHAR(255) NOT NULL, -- and by who acquired
- * TIMESTAMP NULL, -- Time the row was acquired acquired_by VARCHAR(255) NULL,
- * -- and by who delayed_to TIMESTAMP NULL, -- Task delayed to value BLOB NOT
- * NULL, -- The actual data PRIMARY KEY (id) ) ENGINE=INNODB DEFAULT
- * CHARSET=UTF8;
- * 
+ * <p>
+ * CREATE TABLE queue (
+ *     id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+ *     queue_name  VARCHAR(255) NOT NULL,               -- Queue name
+ *     inserted    TIMESTAMP NOT NULL,                  -- Time the row was inserted
+ *     inserted_by VARCHAR(255) NOT NULL,               -- and by who
+ *     acquired    TIMESTAMP NULL,                      -- Time the row was acquired
+ *     acquired_by VARCHAR(255) NULL,                   -- and by who
+ *     delayed_to  TIMESTAMP NULL,                      -- Task delayed to
+ *     value       BLOB NOT NULL,                       -- The actual data
+ *     status      VARCHAR(255) NOT NULL DEFAULT 'NEW'  -- The actual data
+ *     PRIMARY KEY (id)
+ * ) ENGINE=INNODB DEFAULT CHARSET=UTF8;
+ * <p/>
  * TODO Create efficient drainTo
  * 
  * @param <E>
@@ -45,7 +47,7 @@ public class MySQLBasedDelayQueue<E extends Delayed> extends
 				+ "(queue_name, inserted, inserted_by, delayed_to, value) values "
 				+ "(?, now(), ?, DATE_ADD(NOW(), INTERVAL ? SECOND), ?)";
 	
-		peekQuery = "SELECT value FROM "+tableNamePlaceholder+" WHERE "
+		peekQuery = "SELECT id, status, value FROM "+tableNamePlaceholder+" WHERE "
 				+ "acquired IS NULL "
 				+ delayCondition
 				+ "AND queue_name = ? "
@@ -59,26 +61,23 @@ public class MySQLBasedDelayQueue<E extends Delayed> extends
 							+ " acquired_by = ? "
 							+ "WHERE " + "acquired IS NULL " + delayCondition
 							+ "AND queue_name = ? " + "ORDER BY id ASC " + "LIMIT 1; ",
-				"SELECT value FROM "+tableNamePlaceholder+" WHERE id = @update_id"
+				"SELECT id, status, value FROM "+tableNamePlaceholder+" WHERE id = @update_id"
 		};
 	}
 
 
-	/**
-	 * {@inheritDoc}
-	 */
+
 	public MySQLBasedDelayQueue(DataSource ds, String queueTableName,
 			String queueName, Class<E> type, String me) {
 		super(ds, queueTableName, queueName, type, me);
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
+
 	public MySQLBasedDelayQueue(DataSource ds, String queueTableName,
 			String queueName, Serializator<E> serializator, String me) {
 		super(ds, queueTableName, queueName, serializator, me);
 	}
+
 
 	@Override
 	protected void setAddParameters(E value, PreparedStatement s)
@@ -90,7 +89,7 @@ public class MySQLBasedDelayQueue<E extends Delayed> extends
 	}
 
 	/**
-	 * 
+	 * Returns closest task delay.
 	 * @return delay in seconds
 	 * @throws SQLException
 	 */
