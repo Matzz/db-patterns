@@ -197,6 +197,21 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 		}
 	}
 
+
+	@Override
+	public ValueWithMetadata<E> takeWithMetadata() throws InterruptedException {
+		// We loop around trying to get a item, blocking at most a minute at
+		// a time this allows us to be interrupted
+		ValueWithMetadata<E> head = null;
+		while (head == null) {
+			if (Thread.interrupted())
+				throw new InterruptedException();
+
+			head = pollWithMetadata(1, TimeUnit.MINUTES);
+		}
+		return head;
+	}
+
 	@Override
 	public ValueWithMetadata<E> pollWithMetadata(long timeout, TimeUnit unit) throws InterruptedException {
 
@@ -280,6 +295,12 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 	@Override
 	public E poll() {
 		ValueWithMetadata<E> item = pollWithMetadata();
+		return item!=null ? item.value : null;
+	}
+	
+	@Override
+	public E take() throws InterruptedException {
+		ValueWithMetadata<E> item = takeWithMetadata();
 		return item!=null ? item.value : null;
 	}
 

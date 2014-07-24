@@ -3,10 +3,8 @@ package net.bramp.db_patterns.queues;
 import static org.junit.Assert.*;
 
 import java.sql.SQLException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import javax.sql.DataSource;

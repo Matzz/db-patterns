@@ -38,22 +38,6 @@ abstract class AbstractBlockingQueue<E> implements BlockingQueue<E> {
 		return head;
 	}
 
-	/**
-	 * Blocks
-	 */
-	@Override
-	public E take() throws InterruptedException {
-		// We loop around trying to get a item, blocking at most a minute at
-		// a time this allows us to be interrupted
-		E head = null;
-		while (head == null) {
-			if (Thread.interrupted())
-				throw new InterruptedException();
-
-			head = poll(1, TimeUnit.MINUTES);
-		}
-		return head;
-	}
 
 	/**
 	 * Blocks

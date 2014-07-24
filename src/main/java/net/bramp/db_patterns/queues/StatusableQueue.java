@@ -6,6 +6,7 @@ public interface StatusableQueue<E> {
 	public ValueWithMetadata<E> pollWithMetadata();
 	public ValueWithMetadata<E> pollWithMetadata(long timeout, TimeUnit unit) throws InterruptedException;
 	public ValueWithMetadata<E> peekWithMetadata();
+	public ValueWithMetadata<E> takeWithMetadata() throws InterruptedException;
 	public void updateStatus(long id, String newStatus);
 	public String getStatus(long id);
 	
