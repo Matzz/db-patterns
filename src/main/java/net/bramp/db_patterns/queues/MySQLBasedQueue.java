@@ -45,8 +45,11 @@ public class MySQLBasedQueue<E> extends AbstractMySQLQueue<E> {
 				+ " id = (SELECT @update_id := id), "
 				+ " acquired = NOW(), "
 				+ " acquired_by = ? "
-				+ "WHERE " + "acquired IS NULL "
-				+ "AND queue_name = ? " + "ORDER BY id ASC " + "LIMIT 1; ",
+				+ "WHERE "
+				+ "acquired IS NULL "
+				+ "AND queue_name = ? "
+				+ "ORDER BY id ASC "
+				+ "LIMIT 1; ",
 				"SELECT id, status, value FROM "+tableNamePlaceholder+" WHERE id = @update_id"
 		};
 	}
