@@ -3,7 +3,7 @@
 
 	<groupId>matzz</groupId>
 	<artifactId>db-patterns</artifactId>
-	<version>0.3.1</version>
+	<version>0.3.2</version>
 	<packaging>jar</packaging>
 
 	<name>DB Patterns</name>
@@ -54,8 +54,7 @@
 		<dependency>
 			<groupId>mysql</groupId>
 			<artifactId>mysql-connector-java</artifactId>
-			<version>5.1.27</version>
-			<scope>provided</scope>
+			<version>5.1.31</version>
 		</dependency>
 
 		<dependency>
