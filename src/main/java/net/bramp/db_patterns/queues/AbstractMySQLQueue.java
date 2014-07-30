@@ -29,6 +29,11 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 	protected Class<E> type = null;
 	protected Serializator<E> serializator = null;
 	protected Condition condition;
+	/**
+	 * time in seconds
+	 */
+	private volatile int takeBlockingTime = 60;
+			
 
 	final static String tableNamePlaceholder = "%TABLE_NAME%";
 	protected String addQuery;
@@ -73,6 +78,7 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 		this(ds, queueTableName, queueName, me);
 		this.type = type;
 	}
+	
 
 	/**
 	 * Creates a new MySQL backed queue. Store values using serializator and
@@ -98,6 +104,23 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 		this.condition = new MySQLSleepBasedCondition(ds, "queue-" + queueName);
 		this.me = me;
 	}
+
+	/**
+	 * Gets take operation blocking time. Default 60s.
+	 * Unit - seconds.
+	 */
+	public int getTakeBlockingTime() {
+		return takeBlockingTime;
+	}
+
+	/**
+	 * Sets take operation blocking time. Decrease it to enable faster interruption.
+	 * Unit - seconds.
+	 */
+	public void setTakeBlockingTime(int takeBlockingTime) {
+		this.takeBlockingTime = takeBlockingTime;
+	}
+
 
 	@Override
 	public boolean add(E value) {
@@ -207,7 +230,7 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 			if (Thread.interrupted())
 				throw new InterruptedException();
 
-			head = pollWithMetadata(1, TimeUnit.MINUTES);
+			head = pollWithMetadata(takeBlockingTime, TimeUnit.SECONDS);
 		}
 		return head;
 	}
