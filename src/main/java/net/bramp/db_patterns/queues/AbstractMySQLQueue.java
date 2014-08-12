@@ -12,6 +12,9 @@ import java.util.concurrent.locks.Condition;
 import javax.sql.DataSource;
 
 import net.bramp.db_patterns.locks.MySQLSleepBasedCondition;
+import net.bramp.db_patterns.queues.interfaces.CleanableQueue;
+import net.bramp.db_patterns.queues.interfaces.PriorityQueue;
+import net.bramp.db_patterns.queues.interfaces.StatusableQueue;
 import net.bramp.serializator.Serializator;
 
 /**
@@ -20,7 +23,8 @@ import net.bramp.serializator.Serializator;
  * @param <E>
  * @author bramp
  */
-abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements StatusableQueue<E>, CleanableQueue {
+abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
+		StatusableQueue<E, ValueContainer<E>>, PriorityQueue<E>, CleanableQueue {
 	protected String me;
 	protected DataSource ds;
 	protected String queueName;
@@ -33,7 +37,6 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 	 * time in seconds
 	 */
 	private volatile int takeBlockingTime = 60;
-			
 
 	final static String tableNamePlaceholder = "%TABLE_NAME%";
 	protected String addQuery;
@@ -43,20 +46,17 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 
 	protected String clearQuery = "DELETE FROM " + tableNamePlaceholder
 			+ " WHERE queue_name = ? ";
-	
+
 	protected String cleanupQuery = "DELETE FROM " + tableNamePlaceholder
-			+ " WHERE acquired IS NOT NULL "
-			+ " AND queue_name = ? "
+			+ " WHERE acquired IS NOT NULL " + " AND queue_name = ? "
 			+ " AND acquired < DATE_SUB(NOW(), INTERVAL ? DAY)";
 
 	protected String cleanupAllQuery = "DELETE FROM " + tableNamePlaceholder
 			+ " WHERE acquired IS NOT NULL "
 			+ " AND acquired < DATE_SUB(NOW(), INTERVAL ? DAY)";
 
-	protected String updateStatusQuery = "UPDATE "+tableNamePlaceholder
-						+" SET status = ? "
-						+ "WHERE id = ? "
-						+ "LIMIT 1; ";
+	protected String updateStatusQuery = "UPDATE " + tableNamePlaceholder
+			+ " SET status = ? " + "WHERE id = ? " + "LIMIT 1; ";
 
 	protected String getStatusQuery = "SELECT status FROM queue WHERE id = ?";
 
@@ -78,7 +78,6 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 		this(ds, queueTableName, queueName, me);
 		this.type = type;
 	}
-	
 
 	/**
 	 * Creates a new MySQL backed queue. Store values using serializator and
@@ -121,15 +120,19 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 		this.takeBlockingTime = takeBlockingTime;
 	}
 
-
 	@Override
 	public boolean add(E value) {
+		return add(value, ValueContainer.DEFAULT_PRIORRITY);
+	}
+
+	@Override
+	public boolean add(E value, int priority) {
 		try {
 			Connection c = ds.getConnection();
 			try {
 				PreparedStatement s = c.prepareStatement(getAddQuery());
 				try {
-					setAddParameters(value, s);
+					setAddParameters(value, priority, s);
 					s.execute();
 					wakeupThread();
 					return true;
@@ -145,9 +148,9 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 			throw new RuntimeException(e);
 		}
 	}
-
+	
 	@Override
-	public ValueWithMetadata<E> peekWithMetadata() {
+	public ValueContainer<E> peekWithMetadata() {
 		try {
 			Connection c = ds.getConnection();
 			try {
@@ -157,10 +160,7 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 					if (s.execute()) {
 						ResultSet rs = s.getResultSet();
 						if (rs != null && rs.next()) {
-							return new ValueWithMetadata<E>(
-									rs.getLong(1),
-									rs.getString(2),
-									getValueFromResult(rs, 3));
+							return valueContainerFromResult(rs);
 						}
 					}
 					return null;
@@ -178,7 +178,7 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 	}
 
 	@Override
-	public ValueWithMetadata<E> pollWithMetadata() {
+	public ValueContainer<E> pollWithMetadata() {
 		try {
 			Connection c = ds.getConnection();
 			String[] pollQuery = getPollQuery();
@@ -201,10 +201,7 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 				if (s3.execute()) {
 					ResultSet rs = s3.getResultSet();
 					if (rs != null && rs.next()) {
-						return new ValueWithMetadata<E>(
-								rs.getLong(1),
-								rs.getString(2),
-								getValueFromResult(rs, 3));
+						return valueContainerFromResult(rs);
 					}
 				}
 
@@ -220,12 +217,11 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 		}
 	}
 
-
 	@Override
-	public ValueWithMetadata<E> takeWithMetadata() throws InterruptedException {
+	public ValueContainer<E> takeWithMetadata() throws InterruptedException {
 		// We loop around trying to get a item, blocking at most a minute at
 		// a time this allows us to be interrupted
-		ValueWithMetadata<E> head = null;
+		ValueContainer<E> head = null;
 		while (head == null) {
 			if (Thread.interrupted())
 				throw new InterruptedException();
@@ -236,13 +232,14 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 	}
 
 	@Override
-	public ValueWithMetadata<E> pollWithMetadata(long timeout, TimeUnit unit) throws InterruptedException {
+	public ValueContainer<E> pollWithMetadata(long timeout, TimeUnit unit)
+			throws InterruptedException {
 
 		final long deadlineMillis = System.currentTimeMillis()
 				+ unit.toMillis(timeout);
 		final Date deadline = new Date(deadlineMillis);
 
-		ValueWithMetadata<E> head = null;
+		ValueContainer<E> head = null;
 		boolean stillWaiting = true;
 
 		while (stillWaiting) {
@@ -263,7 +260,6 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 		return head;
 	}
 
-
 	@Override
 	public void updateStatus(long id, String newStatus) {
 		try {
@@ -282,7 +278,6 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 			throw new RuntimeException(e);
 		}
 	}
-
 
 	@Override
 	public String getStatus(long id) {
@@ -311,26 +306,26 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 
 	@Override
 	public E peek() {
-		ValueWithMetadata<E> item = peekWithMetadata();
-		return item!=null ? item.value : null;
+		ValueContainer<E> item = peekWithMetadata();
+		return item != null ? item.value : null;
 	}
 
 	@Override
 	public E poll() {
-		ValueWithMetadata<E> item = pollWithMetadata();
-		return item!=null ? item.value : null;
+		ValueContainer<E> item = pollWithMetadata();
+		return item != null ? item.value : null;
 	}
-	
+
 	@Override
 	public E take() throws InterruptedException {
-		ValueWithMetadata<E> item = takeWithMetadata();
-		return item!=null ? item.value : null;
+		ValueContainer<E> item = takeWithMetadata();
+		return item != null ? item.value : null;
 	}
 
 	@Override
 	public E poll(long timeout, TimeUnit unit) throws InterruptedException {
-		ValueWithMetadata<E> item = pollWithMetadata(timeout, unit);
-		return item!=null ? item.value : null;
+		ValueContainer<E> item = pollWithMetadata(timeout, unit);
+		return item != null ? item.value : null;
 	}
 
 	@Override
@@ -357,7 +352,6 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 		}
 	}
 
-
 	@Override
 	public void clear() {
 		Connection c;
@@ -375,7 +369,7 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 			throw new RuntimeException(e);
 		}
 	}
-	
+
 	/**
 	 * Legacy cleanupAll
 	 * 
@@ -396,7 +390,6 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 		cleanupAll(10);
 	}
 
-
 	@Override
 	public void cleanup(int days) throws SQLException {
 		Connection c = ds.getConnection();
@@ -410,7 +403,6 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 			c.close();
 		}
 	}
-
 
 	@Override
 	public void cleanupAll(int days) throws SQLException {
@@ -431,7 +423,8 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 	 * @param statement
 	 * @throws SQLException
 	 */
-	abstract protected void setAddParameters(E value, PreparedStatement statement) throws SQLException;
+	abstract protected void setAddParameters(E value, int priority, PreparedStatement statement)
+			throws SQLException;
 
 	/**
 	 * Binds table name to query
@@ -474,6 +467,22 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 	}
 
 	/**
+	 * Crates ValueContainer form result set.
+	 * @param rs
+	 * @return
+	 * @throws SQLException
+	 */
+	protected ValueContainer<E> valueContainerFromResult(ResultSet rs) throws SQLException {
+		//id, status, priority, value 
+		return new ValueContainer<E>(
+				rs.getLong(1),
+				rs.getString(2),
+				rs.getLong(3),
+				getValueFromResult(rs, 4)
+				);
+	}
+
+	/**
 	 * Sets value to statement. If defined, serializator is used, otherwise setObject with type.
 	 * @param s
 	 * @param index
@@ -489,7 +498,6 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 		}
 	}
 
-
 	/**
 	 * Returns sql query for add operation with binded table name
 	 * @return sql
@@ -497,7 +505,7 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 	protected String getAddQuery() {
 		return setTable(addQuery);
 	}
-	
+
 	/**
 	 * Returns sql query for add operation with binded table name
 	 * @return sql
@@ -512,12 +520,12 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 	 */
 	protected String[] getPollQuery() {
 		String[] queries = new String[pollQuery.length];
-		for(int i=0; i<queries.length; i++) {
-			queries[i] = setTable(pollQuery[i]); 
+		for (int i = 0; i < queries.length; i++) {
+			queries[i] = setTable(pollQuery[i]);
 		}
 		return queries;
 	}
-	
+
 	/**
 	 * Returns sql for size operation with binded table name
 	 * @return sql array
@@ -525,7 +533,7 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 	protected String getSizeQuery() {
 		return setTable(sizeQuery);
 	}
-	
+
 	/**
 	 * Returns sql for set status operation with binded table name
 	 * @return sql array
@@ -533,7 +541,7 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 	protected String getUpdateStatusQuery() {
 		return setTable(updateStatusQuery);
 	}
-	
+
 	/**
 	 * Returns sql for get status operation with binded table name
 	 * @return sql array
@@ -541,7 +549,7 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 	protected String getStatusQuery() {
 		return setTable(getStatusQuery);
 	}
-	
+
 	/**
 	 * Returns sql for clear operation with binded table name
 	 * @return sql array

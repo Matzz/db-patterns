@@ -49,6 +49,11 @@ public class DelayedString implements Comparable<Delayed>, Delayed, Serializable
 	public int hashCode() {
 		return get().hashCode();
 	}
+
+	@Override
+	public String toString() {
+		return get();
+	}
 	
 	private long nowInSeconds() {
 		return System.currentTimeMillis()/1000;

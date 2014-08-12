@@ -7,23 +7,21 @@ import javax.sql.DataSource;
 
 import net.bramp.serializator.Serializator;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 /**
  * A queue backed by MySQL
  * <p>
- * CREATE TABLE queue (
- *     id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
- *     queue_name  VARCHAR(255) NOT NULL,   -- Queue name
- *     inserted    TIMESTAMP NOT NULL,      -- Time the row was inserted
- *     inserted_by VARCHAR(255) NOT NULL,   -- and by who
- *     acquired    TIMESTAMP NULL,          -- Time the row was acquired
- *     acquired_by VARCHAR(255) NULL,       -- and by who
- *     value       BLOB NOT NULL,           -- The actual data
- *     status      VARCHAR(255) NOT NULL DEFAULT 'NEW'  -- The actual data
- *     PRIMARY KEY (id)
- * ) ENGINE=INNODB DEFAULT CHARSET=UTF8;
+ * CREATE TABLE IF NOT EXISTS queue (
+ *   id int(10)  unsigned NOT NULL AUTO_INCREMENT,
+ *   queue_name  varchar(255) NOT NULL,                          -- Queue name
+ *   inserted    timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,   -- Time the row was inserted
+ *   inserted_by varchar(255) NOT NULL,                          -- and by who
+ *   acquired    timestamp NULL DEFAULT NULL,                    -- Time the row was acquired
+ *   acquired_by varchar(255) DEFAULT NULL,                      -- and by who
+ *   status      varchar(255) NOT NULL DEFAULT 'NEW',            -- Item status
+ *   priority    int(11) NOT NULL DEFAULT '0',                   -- Item priority
+ *   value       blob NOT NULL,                                   -- The actual data
+ *   PRIMARY KEY (id)
+ * ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
  * <p/>
  * TODO Create efficient drainTo
  *
@@ -33,12 +31,13 @@ import org.slf4j.LoggerFactory;
 public class MySQLBasedQueue<E> extends AbstractMySQLQueue<E> {
 	{
 		addQuery = "INSERT INTO "+tableNamePlaceholder+" "
-			+ "(queue_name, inserted, inserted_by, value) values "
-			+ "(?, now(), ?, ?)";
-		peekQuery = "SELECT id, status, value FROM "+tableNamePlaceholder+" WHERE "
+			+ "(queue_name, inserted, inserted_by, priority, value) values "
+			+ "(?, now(), ?, ?, ?)";
+		peekQuery = "SELECT id, status, priority, value FROM "+tableNamePlaceholder+" WHERE "
 				+ "acquired IS NULL "
 				+ "AND queue_name = ? "
-				+ "ORDER BY id ASC LIMIT 1";
+				+ "ORDER BY priority DESC, id ASC "
+				+ "LIMIT 1; ";
 		pollQuery = new String[] {
 				"SET @update_id := -1; ",
 				 "UPDATE "+tableNamePlaceholder+" SET "
@@ -48,9 +47,9 @@ public class MySQLBasedQueue<E> extends AbstractMySQLQueue<E> {
 				+ "WHERE "
 				+ "acquired IS NULL "
 				+ "AND queue_name = ? "
-				+ "ORDER BY id ASC "
+				+ "ORDER BY priority DESC, id ASC "
 				+ "LIMIT 1; ",
-				"SELECT id, status, value FROM "+tableNamePlaceholder+" WHERE id = @update_id"
+				"SELECT id, status, priority, value FROM "+tableNamePlaceholder+" WHERE id = @update_id"
 		};
 	}
 
@@ -77,9 +76,10 @@ public class MySQLBasedQueue<E> extends AbstractMySQLQueue<E> {
 	}
 
 	@Override
-	protected void setAddParameters(E value, PreparedStatement s) throws SQLException {
+	protected void setAddParameters(E value, int priority, PreparedStatement s) throws SQLException {
 		s.setString(1, queueName);
 		s.setObject(2, me); // Inserted by me
-		setValueToStatment(s, 3, value);
+		s.setLong(3, priority); // Inserted by me
+		setValueToStatment(s, 4, value);
 	}
 }

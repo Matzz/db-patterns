@@ -83,17 +83,29 @@ A distributed MySQL backed Java DelayQueue
 
 Statuses
 -----------------
-MySQLBasedQueue, MySQLBasedDelayQueue implements StatusableQueue interface which enable seting queue item statuses. Statuses do not affect polling of items. They might be set at any time and to any value. They just provide convenient way of tracking item state.
+MySQLBasedQueue, MySQLBasedDelayQueue implements StatusableQueue interface which enables setting queue item statuses. Statuses do not affect polling of items. They might be set at any time and to any value. They just provides convenient way of tracking item state.
 
-StatusableQueue brings such methods:
+PriorityQueue brings such methods:
 ```java
-	public ValueWithMetadata<E> pollWithMetadata();
-	public ValueWithMetadata<E> pollWithMetadata(long timeout, TimeUnit unit) throws InterruptedException;
-	public ValueWithMetadata<E> peekWithMetadata();
+	public V pollWithMetadata();
+	public V pollWithMetadata(long timeout, TimeUnit unit) throws InterruptedException;
+	public V peekWithMetadata();
 	public void updateStatus(long id, String newStatus);
 	public String getStatus(long id);
 ```
-ValueWithMetadata class contains item id in queue, status and item value.
+Where V is class implementing ValueWithMetadata interface. ValueWithMetadata contains item id in queue, status and item value.
+
+
+Priority
+-----------------
+MySQLBasedQueue, MySQLBasedDelayQueue implements PriorityQueue interface which enables setting items priority. The higher priority is, the earlier item will be polled from queue.
+
+
+StatusableQueue brings such methods:
+```java
+	public boolean add(E value, int priority);
+```
+Default priority for add is 0. Priority could be retrieved from value metadata (see above) using getPriority method.
 
 
 Build and Release

@@ -1,4 +1,4 @@
-package net.bramp.db_patterns.queues;
+package net.bramp.db_patterns.queues.interfaces;
 
 import java.sql.SQLException;
 

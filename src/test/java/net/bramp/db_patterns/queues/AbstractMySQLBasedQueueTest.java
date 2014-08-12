@@ -1,16 +1,18 @@
 package net.bramp.db_patterns.queues;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 import javax.sql.DataSource;
 
 import net.bramp.db_patterns.DatabaseUtils;
-import net.bramp.db_patterns.queues.StatusableQueue.ValueWithMetadata;
 import net.bramp.serializator.DefaultSerializator;
 
 import org.junit.After;
@@ -109,10 +111,10 @@ public class AbstractMySQLBasedQueueTest {
 
 		Object a = valueFactory.apply("A");
 		assertTrue(queue.add(a));
-		ValueWithMetadata<Object> v = queue.peekWithMetadata();
-		queue.updateStatus(v.id, "Test1");
+		ValueContainer<Object> v = queue.peekWithMetadata();
+		queue.updateStatus(v.getId(), "Test1");
 		assertEquals(queue.getStatus(v.id), "Test1");
-		queue.updateStatus(v.id, "Test2");
+		queue.updateStatus(v.getId(), "Test2");
 		assertEquals(queue.getStatus(v.id), "Test2");
 	}
 
@@ -145,5 +147,43 @@ public class AbstractMySQLBasedQueueTest {
 				+ duration + ")", duration < wait * 1.2);
 
 		assertEmpty();
+	}
+
+	@Test
+	public void priorityTest() {
+		assertEmpty();
+
+		Object a = valueFactory.apply("A");
+		Object b = valueFactory.apply("B");
+		Object c = valueFactory.apply("C");
+		Object d = valueFactory.apply("D");
+		assertTrue(queue.add(a, 1));
+		assertTrue(queue.add(b, 0));
+		assertTrue(queue.add(c, 2));
+		assertTrue(queue.add(d, 3));
+
+		assertEquals("Queue head should be D", d, queue.peek());
+		assertEquals("Queue head should be D", d, queue.poll());
+		assertEquals("Queue head should be C", c, queue.poll());
+		assertEquals("Queue head should be A", a, queue.poll());
+		assertEquals("Queue head should be B", b, queue.poll());
+
+		assertEmpty();
+	}
+	@Test
+	public void priorityRandomTest() {
+		assertEmpty();
+
+		Random r = new Random();
+		for(int i=0; i<100; i++) {
+			Object s = valueFactory.apply("Test str");
+			assertTrue(queue.add(s, r.nextInt()));
+		}
+
+		long prevPriority = Long.MAX_VALUE;
+		ValueContainer<Object> vc;
+		while((vc = queue.pollWithMetadata())!=null) {
+			assertTrue("Next priority should be <= previous", vc.getPriority()<=prevPriority);
+		}
 	}
 }

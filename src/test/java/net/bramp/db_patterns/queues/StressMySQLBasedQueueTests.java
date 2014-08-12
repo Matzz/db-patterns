@@ -27,6 +27,8 @@ import org.slf4j.LoggerFactory;
  */
 public class StressMySQLBasedQueueTests {
 
+	private final String TABLE_NAME = "queue";
+	
 	final static Logger LOG = LoggerFactory.getLogger(StressMySQLBasedQueueTests.class);
 
 	private String queueName;
@@ -99,7 +101,7 @@ public class StressMySQLBasedQueueTests {
 		ds = DatabaseUtils.createDataSource();
         me = DatabaseUtils.getHostname();
 
-		queue = new MySQLBasedQueue<Integer>(ds, queueName, Integer.class, me);
+		queue = new MySQLBasedQueue<Integer>(ds, TABLE_NAME, queueName, Integer.class, me);
 
 		executor = Executors.newCachedThreadPool();
 	}
@@ -107,7 +109,7 @@ public class StressMySQLBasedQueueTests {
 	@After
 	public void cleanupDatabase() throws SQLException {
 		queue.clear();
-		queue.cleanupAll();
+		queue.cleanupAll(10);
 		assertEmpty();
 	}
 	

@@ -24,6 +24,8 @@ import org.slf4j.LoggerFactory;
 
 public class MultithreadMySQLBasedQueueTests {
 
+	private final String TABLE_NAME = "queue";
+	
 	final static Logger LOG = LoggerFactory.getLogger(MultithreadMySQLBasedQueueTests.class);
 
 	private String queueName;
@@ -55,7 +57,7 @@ public class MultithreadMySQLBasedQueueTests {
 		ds = DatabaseUtils.createDataSource();
         me = DatabaseUtils.getHostname();
 
-		queue = new MySQLBasedQueue<String>(ds, queueName, String.class, me);
+		queue = new MySQLBasedQueue<String>(ds, TABLE_NAME, queueName, String.class, me);
 
 		executor = Executors.newCachedThreadPool();
 	}
@@ -63,7 +65,7 @@ public class MultithreadMySQLBasedQueueTests {
 	@After
 	public void cleanupDatabase() throws SQLException {
 		queue.clear();
-		queue.cleanupAll();
+		queue.cleanupAll(10);
 		assertEmpty();
 	}
 	
