@@ -1,101 +1,119 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-	<modelVersion>4.0.0</modelVersion>
+  <modelVersion>4.0.0</modelVersion>
 
-	<groupId>matzz</groupId>
-	<artifactId>db-patterns</artifactId>
-	<version>0.3.4</version>
-	<packaging>jar</packaging>
+  <groupId>net.bramp.db-patterns</groupId>
+  <artifactId>db-patterns</artifactId>
+  <version>0.2-SNAPSHOT</version>
+  <packaging>jar</packaging>
 
-	<name>DB Patterns</name>
-	<description>Some simple DB patterns implemented onto of MySQL</description>
-	<url>https://github.com/bramp/db-patterns</url>
+  <name>DB Patterns</name>
+  <description>Some simple DB patterns implemented onto of MySQL</description>
+  <url>https://github.com/bramp/db-patterns</url>
 
-	<developers>
-		<developer>
-			<id>bramp</id>
-			<name>Andrew Brampton</name>
-		</developer>
-	</developers>
+  <developers>
+    <developer>
+      <id>bramp</id>
+      <name>Andrew Brampton</name>
+    </developer>
+  </developers>
 
-	<licenses>
-		<license>
-			<name>The BSD 2-Clause License</name>
-			<url>http://opensource.org/licenses/BSD-2-Clause</url>
-			<distribution>repo</distribution>
-		</license>
-	</licenses>
+  <licenses>
+    <license>
+      <name>The BSD 2-Clause License</name>
+      <url>http://opensource.org/licenses/BSD-2-Clause</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
 
-	<properties>
-		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+  <scm>
+    <url>https://github.com/bramp/db-patterns</url>
+    <connection>scm:git:git@github.com:bramp/db-patterns.git</connection>
+    <tag>HEAD</tag>
+  </scm>
 
-		<logback.version>0.9.30</logback.version>
-	</properties>
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
-	<dependencies>
-		<dependency>
-			<groupId>org.slf4j</groupId>
-			<artifactId>slf4j-api</artifactId>
-			<version>1.6.2</version>
-		</dependency>
-		<dependency>
-			<groupId>com.google.code.findbugs</groupId>
-			<artifactId>jsr305</artifactId>
-			<version>2.0.2</version>
-			<scope>provided</scope>
-		</dependency>
-		<dependency>
-			<groupId>net.sourceforge.findbugs</groupId>
-			<artifactId>annotations</artifactId>
-			<version>1.3.2</version>
-			<scope>provided</scope>
-		</dependency>
+    <logback.version>0.9.30</logback.version>
+  </properties>
 
-		<dependency>
-			<groupId>mysql</groupId>
-			<artifactId>mysql-connector-java</artifactId>
-			<version>5.1.31</version>
-		</dependency>
+  <dependencies>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+      <version>1.6.2</version>
+    </dependency>
+    <dependency>
+      <groupId>com.google.code.findbugs</groupId>
+      <artifactId>jsr305</artifactId>
+      <version>2.0.2</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>net.sourceforge.findbugs</groupId>
+      <artifactId>annotations</artifactId>
+      <version>1.3.2</version>
+      <scope>provided</scope>
+    </dependency>
 
-		<dependency>
-			<groupId>junit</groupId>
-			<artifactId>junit</artifactId>
-			<version>4.11</version>
-			<scope>test</scope>
-		</dependency>
+    <dependency>
+      <groupId>mysql</groupId>
+      <artifactId>mysql-connector-java</artifactId>
+      <version>5.1.27</version>
+      <scope>provided</scope>
+    </dependency>
 
-		<dependency>
-			<groupId>ch.qos.logback</groupId>
-			<artifactId>logback-core</artifactId>
-			<version>${logback.version}</version>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>ch.qos.logback</groupId>
-			<artifactId>logback-classic</artifactId>
-			<version>${logback.version}</version>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>com.google.guava</groupId>
-			<artifactId>guava</artifactId>
-			<version>15.0</version>
-			<scope>test</scope>
-		</dependency>
-	</dependencies>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>4.11</version>
+      <scope>test</scope>
+    </dependency>
 
-	<build>
-		<plugins>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-compiler-plugin</artifactId>
-				<version>3.1</version>
-				<configuration>
-					<source>1.6</source>
-					<target>1.6</target>
-					<encoding>UTF-8</encoding>
-				</configuration>
-			</plugin>
+    <dependency>
+      <groupId>ch.qos.logback</groupId>
+      <artifactId>logback-core</artifactId>
+      <version>${logback.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>ch.qos.logback</groupId>
+      <artifactId>logback-classic</artifactId>
+      <version>${logback.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava</artifactId>
+      <version>15.0</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <distributionManagement>
+    <snapshotRepository>
+      <id>ossrh</id>
+      <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+    </snapshotRepository>
+        <repository>
+            <id>ossrh</id>
+            <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+        </repository>
+  </distributionManagement>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.1</version>
+        <configuration>
+          <source>1.6</source>
+          <target>1.6</target>
+          <encoding>UTF-8</encoding>
+        </configuration>
+      </plugin>
 
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -138,53 +156,53 @@
                 </executions>
             </plugin>
 
-<!--             <plugin> -->
-<!--                 <groupId>org.apache.maven.plugins</groupId> -->
-<!--                 <artifactId>maven-deploy-plugin</artifactId> -->
-<!--                 <version>2.8.1</version> -->
-<!--             </plugin> -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-deploy-plugin</artifactId>
+                <version>2.8.1</version>
+            </plugin>
 
-<!--             <plugin> -->
-<!--                 <groupId>org.apache.maven.plugins</groupId> -->
-<!--                 <artifactId>maven-gpg-plugin</artifactId> -->
-<!--                 <version>1.5</version> -->
-<!--                 <executions> -->
-<!--                     <execution> -->
-<!--                         <id>sign-artifacts</id> -->
-<!--                         <phase>verify</phase> -->
-<!--                         <goals> -->
-<!--                             <goal>sign</goal> -->
-<!--                         </goals> -->
-<!--                     </execution> -->
-<!--                 </executions> -->
-<!--             </plugin> -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-gpg-plugin</artifactId>
+                <version>1.5</version>
+                <executions>
+                    <execution>
+                        <id>sign-artifacts</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>sign</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
 
-<!--             <plugin> -->
-<!--                 <groupId>org.apache.maven.plugins</groupId> -->
-<!--                 <artifactId>maven-release-plugin</artifactId> -->
-<!--                 <version>2.5</version> -->
-<!--                 <configuration> -->
-<!--                     <autoVersionSubmodules>true</autoVersionSubmodules> -->
-<!--                     <useReleaseProfile>false</useReleaseProfile> -->
-<!--                     <releaseProfiles>release</releaseProfiles> -->
-<!--                     <goals>deploy nexus-staging:release</goals> -->
-<!--                 </configuration> -->
-<!--             </plugin> -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-release-plugin</artifactId>
+                <version>2.5</version>
+                <configuration>
+                    <autoVersionSubmodules>true</autoVersionSubmodules>
+                    <useReleaseProfile>false</useReleaseProfile>
+                    <releaseProfiles>release</releaseProfiles>
+                    <goals>deploy nexus-staging:release</goals>
+                </configuration>
+            </plugin>
 
-<!--             <plugin> -->
-<!--                 <groupId>org.sonatype.plugins</groupId> -->
-<!--                 <artifactId>nexus-staging-maven-plugin</artifactId> -->
-<!--                 <version>1.6.1</version> -->
-<!--                 <extensions>true</extensions> -->
-<!--                 <configuration> -->
-<!--                     <serverId>ossrh</serverId> -->
-<!--                     <nexusUrl>https://oss.sonatype.org/</nexusUrl> -->
-<!--                     <autoReleaseAfterClose>true</autoReleaseAfterClose> -->
-<!--                 </configuration> -->
-<!--             </plugin> -->
+            <plugin>
+                <groupId>org.sonatype.plugins</groupId>
+                <artifactId>nexus-staging-maven-plugin</artifactId>
+                <version>1.6.1</version>
+                <extensions>true</extensions>
+                <configuration>
+                    <serverId>ossrh</serverId>
+                    <nexusUrl>https://oss.sonatype.org/</nexusUrl>
+                    <autoReleaseAfterClose>true</autoReleaseAfterClose>
+                </configuration>
+            </plugin>
 
-		</plugins>
+    </plugins>
 
-		<defaultGoal>install</defaultGoal>
-	</build>
+    <defaultGoal>install</defaultGoal>
+  </build>
 </project>
