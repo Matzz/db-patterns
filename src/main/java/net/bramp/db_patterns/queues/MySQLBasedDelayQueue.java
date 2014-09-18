@@ -29,6 +29,8 @@ import net.bramp.serializator.Serializator;
  *   priority    int(11) NOT NULL DEFAULT '0',                   -- Item priority
  *   value       blob NOT NULL,                                  -- The actual data
  *   PRIMARY KEY (id)
+ *   UNIQUE KEY `queue_peek_index` (`acquired`,`queue_name`,`id`)
+ *   UNIQUE KEY `sort_index` (`priority`,`id`)
  * ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
  * <p/>
  * TODO Create efficient drainTo
@@ -47,13 +49,13 @@ public class MySQLBasedDelayQueue<E extends Delayed> extends
 	{
 		addQuery = "INSERT INTO "+tableNamePlaceholder+" "
 				+ "(queue_name, inserted, inserted_by, delayed_to, priority, value) values "
-				+ "(?, now(), ?, DATE_ADD(NOW(), INTERVAL ? SECOND), ?, ?)";
+				+ "(?, now(), ?, DATE_ADD(NOW(), INTERVAL ? SECOND), -?, ?)";
 	
-		peekQuery = "SELECT id, status, priority, value FROM "+tableNamePlaceholder+" WHERE "
+		peekQuery = "SELECT id, status, -priority, value FROM "+tableNamePlaceholder+" WHERE "
 				+ "acquired IS NULL "
 				+ delayCondition
 				+ "AND queue_name = ? "
-				+ "ORDER BY priority DESC, id ASC "
+				+ "ORDER BY priority ASC, id ASC "
 				+ "LIMIT 1; ";
 
 		pollQuery = new String[] {
@@ -64,9 +66,9 @@ public class MySQLBasedDelayQueue<E extends Delayed> extends
 							+ " acquired_by = ? "
 							+ "WHERE " + "acquired IS NULL " + delayCondition
 							+ "AND queue_name = ? "
-							+ "ORDER BY priority DESC, id ASC "
+							+ "ORDER BY priority ASC, id ASC "
 							+ "LIMIT 1; ",
-				"SELECT id, status, priority, value FROM "+tableNamePlaceholder+" WHERE id = @update_id"
+				"SELECT id, status, -priority, value FROM "+tableNamePlaceholder+" WHERE id = @update_id"
 		};
 	}
 

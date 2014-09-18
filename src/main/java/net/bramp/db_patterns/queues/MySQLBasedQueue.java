@@ -19,8 +19,10 @@ import net.bramp.serializator.Serializator;
  *   acquired_by varchar(255) DEFAULT NULL,                      -- and by who
  *   status      varchar(255) NOT NULL DEFAULT 'NEW',            -- Item status
  *   priority    int(11) NOT NULL DEFAULT '0',                   -- Item priority
- *   value       blob NOT NULL,                                   -- The actual data
+ *   value       blob NOT NULL,                                  -- The actual data
  *   PRIMARY KEY (id)
+ *   UNIQUE KEY `queue_peek_index` (`acquired`,`queue_name`,`id`)
+ *   UNIQUE KEY `sort_index` (`priority`,`id`)
  * ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
  * <p/>
  * TODO Create efficient drainTo
@@ -32,11 +34,11 @@ public class MySQLBasedQueue<E> extends AbstractMySQLQueue<E> {
 	{
 		addQuery = "INSERT INTO "+tableNamePlaceholder+" "
 			+ "(queue_name, inserted, inserted_by, priority, value) values "
-			+ "(?, now(), ?, ?, ?)";
-		peekQuery = "SELECT id, status, priority, value FROM "+tableNamePlaceholder+" WHERE "
+			+ "(?, now(), ?, -?, ?)";
+		peekQuery = "SELECT id, status, -priority, value FROM "+tableNamePlaceholder+" WHERE "
 				+ "acquired IS NULL "
 				+ "AND queue_name = ? "
-				+ "ORDER BY priority DESC, id ASC "
+				+ "ORDER BY priority ASC, id ASC "
 				+ "LIMIT 1; ";
 		pollQuery = new String[] {
 				"SET @update_id := -1; ",
@@ -47,9 +49,9 @@ public class MySQLBasedQueue<E> extends AbstractMySQLQueue<E> {
 				+ "WHERE "
 				+ "acquired IS NULL "
 				+ "AND queue_name = ? "
-				+ "ORDER BY priority DESC, id ASC "
+				+ "ORDER BY priority ASC, id ASC "
 				+ "LIMIT 1; ",
-				"SELECT id, status, priority, value FROM "+tableNamePlaceholder+" WHERE id = @update_id"
+				"SELECT id, status, -priority, value FROM "+tableNamePlaceholder+" WHERE id = @update_id"
 		};
 	}
 
