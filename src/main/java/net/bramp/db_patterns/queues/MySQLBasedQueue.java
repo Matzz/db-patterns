@@ -21,8 +21,7 @@ import net.bramp.serializator.Serializator;
  *   priority    int(11) NOT NULL DEFAULT '0',                   -- Item priority
  *   value       blob NOT NULL,                                  -- The actual data
  *   PRIMARY KEY (id)
- *   UNIQUE KEY `queue_peek_index` (`acquired`,`queue_name`,`id`)
- *   UNIQUE KEY `sort_index` (`priority`,`id`)
+ *   UNIQUE KEY `queue_peek_index` (`acquired`,`queue_name`, `priority`,`id`)
  * ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
  * <p/>
  * TODO Create efficient drainTo
