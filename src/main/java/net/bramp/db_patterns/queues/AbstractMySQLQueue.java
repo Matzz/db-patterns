@@ -189,8 +189,8 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 				s1.execute();
 
 				PreparedStatement s2 = c.prepareStatement(pollQuery[1]);
-				s2.setString(1, me); // Acquired by me
-				s2.setString(2, queueName);
+				s2.setString(1, queueName);
+				s2.setString(2, me); // Acquired by me
 				s2.execute();
 
 				CallableStatement s3 = c.prepareCall(pollQuery[2]);
