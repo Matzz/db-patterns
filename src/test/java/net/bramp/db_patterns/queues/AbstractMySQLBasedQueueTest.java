@@ -186,4 +186,17 @@ public class AbstractMySQLBasedQueueTest {
 			assertTrue("Next priority should be <= previous", vc.getPriority()<=prevPriority);
 		}
 	}
+	
+	@Test
+	public void getPriorityTest() {
+		assertEmpty();
+
+		queue.add(valueFactory.apply("a"), 11);
+		queue.add(valueFactory.apply("b"), 10);
+		queue.add(valueFactory.apply("c"), 12);
+		assertTrue(queue.pollWithMetadata().priority == 12);
+		assertTrue(queue.pollWithMetadata().priority == 11);
+		assertTrue(queue.pollWithMetadata().priority == 10);
+		
+	}
 }

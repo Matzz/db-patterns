@@ -19,8 +19,9 @@ import net.bramp.serializator.Serializator;
  *   acquired_by varchar(255) DEFAULT NULL,                      -- and by who
  *   status      varchar(255) NOT NULL DEFAULT 'NEW',            -- Item status
  *   priority    int(11) NOT NULL DEFAULT '0',                   -- Item priority
- *   value       blob NOT NULL,                                   -- The actual data
+ *   value       blob NOT NULL,                                  -- The actual data
  *   PRIMARY KEY (id)
+ *   UNIQUE KEY `queue_peek_index` (`acquired`,`queue_name`, `priority`,`id`)
  * ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
  * <p/>
  * TODO Create efficient drainTo
@@ -32,24 +33,28 @@ public class MySQLBasedQueue<E> extends AbstractMySQLQueue<E> {
 	{
 		addQuery = "INSERT INTO "+tableNamePlaceholder+" "
 			+ "(queue_name, inserted, inserted_by, priority, value) values "
-			+ "(?, now(), ?, ?, ?)";
-		peekQuery = "SELECT id, status, priority, value FROM "+tableNamePlaceholder+" WHERE "
+			+ "(?, now(), ?, -?, ?)";
+		peekQuery = "SELECT id, status, -priority, value FROM "+tableNamePlaceholder+" WHERE "
 				+ "acquired IS NULL "
 				+ "AND queue_name = ? "
-				+ "ORDER BY priority DESC, id ASC "
+				+ "ORDER BY priority ASC, id ASC "
 				+ "LIMIT 1; ";
 		pollQuery = new String[] {
 				"SET @update_id := -1; ",
-				 "UPDATE "+tableNamePlaceholder+" SET "
-				+ " id = (SELECT @update_id := id), "
-				+ " acquired = NOW(), "
-				+ " acquired_by = ? "
+				"UPDATE "+tableNamePlaceholder+" u "
+				+ "join ( "
+				+ "SELECT id from " + tableNamePlaceholder + " "
 				+ "WHERE "
 				+ "acquired IS NULL "
 				+ "AND queue_name = ? "
-				+ "ORDER BY priority DESC, id ASC "
-				+ "LIMIT 1; ",
-				"SELECT id, status, priority, value FROM "+tableNamePlaceholder+" WHERE id = @update_id"
+				+ "ORDER BY priority ASC, id ASC "
+				+ "LIMIT 1) s "
+				+ "ON u.id = s.id "
+				+ "SET "
+				+ "u.id = (SELECT @update_id := s.id), "
+				+ "acquired = NOW(), "
+				+ "acquired_by = ?; ",
+				"SELECT id, status, -priority, value FROM "+tableNamePlaceholder+" WHERE id = @update_id;"
 		};
 	}
 

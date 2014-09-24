@@ -99,7 +99,7 @@ Where V is class implementing ValueWithMetadata interface. ValueWithMetadata con
 Priority
 -----------------
 MySQLBasedQueue, MySQLBasedDelayQueue implements PriorityQueue interface which enables setting items priority. The higher priority is, the earlier item will be polled from queue.
-
+From 0.3.5 version, due to lack of DESC index in mysql, internally in table values are stored inverted. While migrating to version 0.3.5 all priorities should be multiplied by -1.
 
 StatusableQueue brings such methods:
 ```java
