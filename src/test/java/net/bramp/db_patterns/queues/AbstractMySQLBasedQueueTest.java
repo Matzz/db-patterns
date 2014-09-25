@@ -251,7 +251,6 @@ public class AbstractMySQLBasedQueueTest {
 		List<Object> allDoneList = new LinkedList<Object>();
 		for (int i = 0; i < threadsCnt; i++) {
 			List<Object> currentDone = futures.get(i).get();
-			System.out.println(currentDone);
 			allDoneList.addAll(currentDone);
 		}
 		Set<Object> uniqSet = new HashSet<Object>(allDoneList);
