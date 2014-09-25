@@ -39,61 +39,51 @@ import net.bramp.serializator.Serializator;
  */
 public class MySQLBasedDelayQueue<E extends Delayed> extends
 		AbstractMySQLQueue<E> {
-	 
-	protected String closestDelayQuery = "SELECT min(TIME_TO_SEC(TIMEDIFF(delayed_to,NOW()))) FROM " + tableNamePlaceholder
+
+	protected String closestDelayQuery = "SELECT min(TIME_TO_SEC(TIMEDIFF(delayed_to,NOW()))) FROM "
+			+ tableNamePlaceholder
 			+ " WHERE acquired IS NULL AND queue_name = ?";
 
 	protected String delayCondition = "AND (delayed_to<=NOW() OR delayed_to is null) ";
-	
+
 	{
-		addQuery = "INSERT INTO "+tableNamePlaceholder+" "
+		addQuery = "INSERT INTO "
+				+ tableNamePlaceholder
+				+ " "
 				+ "(queue_name, inserted, inserted_by, delayed_to, priority, value) values "
 				+ "(?, now(), ?, DATE_ADD(NOW(), INTERVAL ? SECOND), -?, ?)";
-	
-		peekQuery = "SELECT id, status, -priority, value FROM "+tableNamePlaceholder+" WHERE "
-				+ "acquired IS NULL "
-				+ delayCondition
-				+ "AND queue_name = ? "
-				+ "ORDER BY priority ASC, id ASC "
-				+ "LIMIT 1; ";
 
+		peekQuery = "SELECT id, status, -priority, value FROM "
+				+ tableNamePlaceholder + " WHERE " + "acquired IS NULL "
+				+ delayCondition + "AND queue_name = ? "
+				+ "ORDER BY priority ASC, id ASC " + "LIMIT 1; ";
 
 		pollQuery = new String[] {
 				"SET @update_id := -1; ",
-				"UPDATE "+tableNamePlaceholder+" u "
-				+ "join ( "
-				+ "SELECT id from " + tableNamePlaceholder + " "
-				+ "WHERE "
-				+ "acquired IS NULL "
-				+ delayCondition
-				+ "AND queue_name = ? "
-				+ "ORDER BY priority ASC, id ASC "
-				+ "LIMIT 1) s "
-				+ "ON u.id = s.id "
-				+ "SET "
-				+ "u.id = (SELECT @update_id := s.id), "
-				+ "acquired = NOW(), "
-				+ "acquired_by = ?; ",
-				"SELECT id, status, -priority, value FROM "+tableNamePlaceholder+" WHERE id = @update_id;"
-		};
+				"SELECT (SELECT @update_id := id), status, -priority, value "
+						+ "FROM " + tableNamePlaceholder + " " + "WHERE "
+						+ "acquired IS NULL " + delayCondition
+						+ "AND queue_name = ? "
+						+ "ORDER BY priority ASC, id ASC " + "LIMIT 1 "
+						+ "FOR UPDATE",
+				"UPDATE " + tableNamePlaceholder + " u " + "SET "
+						+ "acquired = NOW(), " + "acquired_by = ? "
+						+ "where u.id = @update_id;" };
 	}
-
-
 
 	public MySQLBasedDelayQueue(DataSource ds, String queueTableName,
 			String queueName, Class<E> type, String me) {
 		super(ds, queueTableName, queueName, type, me);
 	}
 
-
 	public MySQLBasedDelayQueue(DataSource ds, String queueTableName,
 			String queueName, Serializator<E> serializator, String me) {
 		super(ds, queueTableName, queueName, serializator, me);
 	}
 
-
 	@Override
-	protected void setAddParameters(E value, int priority, PreparedStatement s) throws SQLException {
+	protected void setAddParameters(E value, int priority, PreparedStatement s)
+			throws SQLException {
 		s.setString(1, queueName);
 		s.setObject(2, me); // Inserted by me
 		s.setLong(3, value.getDelay(TimeUnit.SECONDS));
@@ -108,28 +98,33 @@ public class MySQLBasedDelayQueue<E extends Delayed> extends
 	 */
 	protected long getClosestDelay() throws SQLException {
 		int minDelay = 0;
-		
+
 		String query = setTable(closestDelayQuery);
 		Connection c = ds.getConnection();
-		
-		PreparedStatement s = c.prepareStatement(query);
-		s.setString(1, queueName);
-		if (s.execute()) {
-			ResultSet rs = s.getResultSet();
-			if (rs != null && rs.next()) {
-				minDelay = rs.getInt(1);
+		try {
+			PreparedStatement s = c.prepareStatement(query);
+			s.setString(1, queueName);
+			if (s.execute()) {
+				ResultSet rs = s.getResultSet();
+				if (rs != null && rs.next()) {
+					minDelay = rs.getInt(1);
+				}
 			}
+			return minDelay;
+		} finally {
+			c.close();
 		}
-		return minDelay;
 	}
 
-	protected ScheduledExecutorService wakeupScheduler = Executors.newScheduledThreadPool(1);
+	protected ScheduledExecutorService wakeupScheduler = Executors
+			.newScheduledThreadPool(1);
 	protected ScheduledFuture<?> wakeupTask = null;
+
 	protected class WakeupTask implements Runnable {
 		@Override
 		public void run() {
 			condition.signal();
-			synchronized(wakeupScheduler) {
+			synchronized (wakeupScheduler) {
 				wakeupScheduler.schedule(new Runnable() {
 					@Override
 					public void run() {
@@ -139,26 +134,29 @@ public class MySQLBasedDelayQueue<E extends Delayed> extends
 			}
 		}
 	};
-	
+
 	@Override
 	protected void wakeupThread() {
 		synchronized (wakeupScheduler) {
-				long delaySeconds;
-				try {
-					delaySeconds = getClosestDelay();
-					if(delaySeconds<=0) {
-						delaySeconds = 1;
-					}
-				} catch (SQLException e) {
+			long delaySeconds;
+			try {
+				delaySeconds = getClosestDelay();
+				if (delaySeconds <= 0) {
 					delaySeconds = 1;
-					e.printStackTrace();
 				}
-				if(wakeupTask!=null && wakeupTask.getDelay(TimeUnit.SECONDS)>delaySeconds) {
-					wakeupTask.cancel(false);
-				}
-				if(wakeupTask==null || wakeupTask.isDone() || wakeupTask.isCancelled()) {
-					wakeupTask = wakeupScheduler.schedule(new WakeupTask(), delaySeconds, TimeUnit.SECONDS);
-				}
+			} catch (SQLException e) {
+				delaySeconds = 1;
+				e.printStackTrace();
+			}
+			if (wakeupTask != null
+					&& wakeupTask.getDelay(TimeUnit.SECONDS) > delaySeconds) {
+				wakeupTask.cancel(false);
+			}
+			if (wakeupTask == null || wakeupTask.isDone()
+					|| wakeupTask.isCancelled()) {
+				wakeupTask = wakeupScheduler.schedule(new WakeupTask(),
+						delaySeconds, TimeUnit.SECONDS);
+			}
 
 		}
 	}

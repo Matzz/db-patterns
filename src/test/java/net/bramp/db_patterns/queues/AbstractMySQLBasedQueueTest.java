@@ -5,9 +5,19 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Random;
+import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import javax.sql.DataSource;
@@ -56,8 +66,7 @@ public class AbstractMySQLBasedQueueTest {
 				queueName, String.class, me);
 		return Arrays.asList(new Object[][] {
 				new Object[] { dsFactory, delayedQueue },
-				new Object[] { sFactory, standardQueue }
-				});
+				new Object[] { sFactory, standardQueue } });
 	}
 
 	public AbstractMySQLBasedQueueTest(Function<String, Object> valueFactory,
@@ -93,7 +102,7 @@ public class AbstractMySQLBasedQueueTest {
 		assertTrue(queue.add(b));
 
 		assertEquals("Queue should start empty", 2, queue.size());
-		
+
 		assertEquals("Queue head should be A", a, queue.peek());
 		assertEquals("Queue head should be A", a, queue.poll());
 
@@ -170,23 +179,25 @@ public class AbstractMySQLBasedQueueTest {
 
 		assertEmpty();
 	}
+
 	@Test
 	public void priorityRandomTest() {
 		assertEmpty();
 
 		Random r = new Random();
-		for(int i=0; i<100; i++) {
+		for (int i = 0; i < 100; i++) {
 			Object s = valueFactory.apply("Test str");
 			assertTrue(queue.add(s, r.nextInt()));
 		}
 
 		long prevPriority = Long.MAX_VALUE;
 		ValueContainer<Object> vc;
-		while((vc = queue.pollWithMetadata())!=null) {
-			assertTrue("Next priority should be <= previous", vc.getPriority()<=prevPriority);
+		while ((vc = queue.pollWithMetadata()) != null) {
+			assertTrue("Next priority should be <= previous",
+					vc.getPriority() <= prevPriority);
 		}
 	}
-	
+
 	@Test
 	public void getPriorityTest() {
 		assertEmpty();
@@ -197,6 +208,54 @@ public class AbstractMySQLBasedQueueTest {
 		assertTrue(queue.pollWithMetadata().priority == 12);
 		assertTrue(queue.pollWithMetadata().priority == 11);
 		assertTrue(queue.pollWithMetadata().priority == 10);
+
+	}
+
+	@Test
+	public void multhreadUniqResultsTest() throws InterruptedException,
+			ExecutionException {
+		assertEmpty();
+
+		class Worker implements Callable<List<Object>> {
+			@Override
+			public List<Object> call() {
+				List<Object> done = new LinkedList<Object>();
+				try {
+					Object last = null;
+					do {
+						last = queue.poll(5, TimeUnit.SECONDS);
+						if(last!=null) {
+							done.add(last);
+						}
+					} while (last != null);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+				return done;
+			}
+
+		}
+
+		int threadsCnt = 20;
+		int itemsCnt = 500;
 		
+		for (int i = 0; i < itemsCnt; i++) {
+			assertTrue(queue.add(valueFactory.apply(String.valueOf(i))));
+		}
+		ExecutorService executor = Executors.newFixedThreadPool(threadsCnt);
+		List<Future<List<Object>>> futures = new ArrayList<Future<List<Object>>>(
+				threadsCnt);
+		for (int i = 0; i < threadsCnt; i++) {
+			futures.add(executor.submit(new Worker()));
+		}
+		List<Object> allDoneList = new LinkedList<Object>();
+		for (int i = 0; i < threadsCnt; i++) {
+			List<Object> currentDone = futures.get(i).get();
+			System.out.println(currentDone);
+			allDoneList.addAll(currentDone);
+		}
+		Set<Object> uniqSet = new HashSet<Object>(allDoneList);
+		assertEquals(uniqSet.size(), allDoneList.size());
+		assertEmpty();
 	}
 }
