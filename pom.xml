@@ -3,7 +3,7 @@
 
 	<groupId>matzz</groupId>
 	<artifactId>db-patterns</artifactId>
-	<version>0.3.7</version>
+	<version>0.3.8</version>
 	<packaging>jar</packaging>
 
 	<name>DB Patterns</name>

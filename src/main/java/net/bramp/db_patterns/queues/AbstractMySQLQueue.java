@@ -192,16 +192,18 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 
 			s1 = c.prepareStatement(pollQuery[1]);
 			s1.setString(1, queueName);
-			s1.setString(2, me); // Acquired by me
-			s1.execute();
+			boolean success = s1.execute();
 
-			s2 = c.prepareStatement(pollQuery[2]);
-			boolean success = s2.execute();
+			if(success) {
+				s2 = c.prepareStatement(pollQuery[2]);
+				s2.setString(1, me); // Acquired by me
+				s2.execute();
+			}
 
 			c.commit();
 
 			if (success) {
-				ResultSet rs = s2.getResultSet();
+				ResultSet rs = s1.getResultSet();
 				if (rs != null && rs.next()) {
 					return valueContainerFromResult(rs);
 				}

@@ -57,24 +57,22 @@ public class MySQLBasedDelayQueue<E extends Delayed> extends
 				+ "ORDER BY priority ASC, id ASC "
 				+ "LIMIT 1; ";
 
-
 		pollQuery = new String[] {
 				"SET @update_id := -1; ",
-				"UPDATE "+tableNamePlaceholder+" u "
-				+ "join ( "
-				+ "SELECT id from " + tableNamePlaceholder + " "
+				"SELECT (SELECT @update_id := id), status, -priority, value "
+				+ "FROM "+tableNamePlaceholder+" "
 				+ "WHERE "
 				+ "acquired IS NULL "
 				+ delayCondition
 				+ "AND queue_name = ? "
 				+ "ORDER BY priority ASC, id ASC "
-				+ "LIMIT 1) s "
-				+ "ON u.id = s.id "
+				+ "LIMIT 1 "
+				+ "FOR UPDATE",
+				"UPDATE "+tableNamePlaceholder+" u "
 				+ "SET "
-				+ "u.id = (SELECT @update_id := s.id), "
 				+ "acquired = NOW(), "
-				+ "acquired_by = ?; ",
-				"SELECT id, status, -priority, value FROM "+tableNamePlaceholder+" WHERE id = @update_id;"
+				+ "acquired_by = ? "
+				+ "where u.id = @update_id;"
 		};
 	}
 
