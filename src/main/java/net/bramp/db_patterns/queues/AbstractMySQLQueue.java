@@ -7,9 +7,12 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 
 import javax.sql.DataSource;
+
+import com.mysql.jdbc.exceptions.jdbc4.MySQLTransactionRollbackException;
 
 import net.bramp.db_patterns.locks.MySQLSleepBasedCondition;
 import net.bramp.db_patterns.queues.interfaces.CleanableQueue;
@@ -148,7 +151,7 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 			throw new RuntimeException(e);
 		}
 	}
-	
+
 	@Override
 	public ValueContainer<E> peekWithMetadata() {
 		try {
@@ -177,43 +180,76 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 		}
 	}
 
+	protected ValueContainer<E> executePollWithMetadata(Connection c,
+			String[] pollQuery) throws SQLException {
+		PreparedStatement s0 = null;
+		PreparedStatement s1 = null;
+		PreparedStatement s2 = null;
+
+		try {
+			s0 = c.prepareStatement(pollQuery[0]);
+			s0.execute();
+
+			s1 = c.prepareStatement(pollQuery[1]);
+			s1.setString(1, queueName);
+			s1.setString(2, me); // Acquired by me
+			s1.execute();
+
+			s2 = c.prepareStatement(pollQuery[2]);
+			boolean success = s2.execute();
+
+			c.commit();
+
+			if (success) {
+				ResultSet rs = s2.getResultSet();
+				if (rs != null && rs.next()) {
+					return valueContainerFromResult(rs);
+				}
+			}
+			return null;
+
+		} finally {
+			try { if (s0 != null) s0.close(); } catch (Exception e) { }
+			try { if (s1 != null) s0.close(); } catch (Exception e) { }
+			try { if (s2 != null) s0.close(); } catch (Exception e) { }
+		}
+	}
+	
+	AtomicInteger eCnt = new AtomicInteger(0);
+
 	@Override
 	public ValueContainer<E> pollWithMetadata() {
+		String[] pollQuery = getPollQuery();
+		Connection c = null;
 		try {
-			Connection c = ds.getConnection();
-			String[] pollQuery = getPollQuery();
-			try {
-				c.setAutoCommit(false);
-
-				CallableStatement s1 = c.prepareCall(pollQuery[0]);
-				s1.execute();
-
-				PreparedStatement s2 = c.prepareStatement(pollQuery[1]);
-				s2.setString(1, queueName);
-				s2.setString(2, me); // Acquired by me
-				s2.execute();
-
-				CallableStatement s3 = c.prepareCall(pollQuery[2]);
-				s3.execute();
-
-				c.commit();
-
-				if (s3.execute()) {
-					ResultSet rs = s3.getResultSet();
-					if (rs != null && rs.next()) {
-						return valueContainerFromResult(rs);
-					}
+			c = ds.getConnection();
+			c.setAutoCommit(false);
+			SQLException lastException = null;
+			do {
+				try {
+					return executePollWithMetadata(c, pollQuery);
 				}
-
-				return null;
-
-			} finally {
-				c.setAutoCommit(true);
-				c.close();
+				catch(SQLException e) {
+					c.rollback();
+					lastException = e;
+				}
 			}
-
+			while(lastException instanceof MySQLTransactionRollbackException);
+			if(lastException!=null) {
+				throw lastException;
+			}
+			return null;
 		} catch (SQLException e) {
 			throw new RuntimeException(e);
+		}
+		finally {
+			if (c != null) {
+				try {
+					c.setAutoCommit(true);
+					c.close();
+				} catch (Exception ex) {
+				}
+			}
 		}
 	}
 
@@ -423,8 +459,8 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 	 * @param statement
 	 * @throws SQLException
 	 */
-	abstract protected void setAddParameters(E value, int priority, PreparedStatement statement)
-			throws SQLException;
+	abstract protected void setAddParameters(E value, int priority,
+			PreparedStatement statement) throws SQLException;
 
 	/**
 	 * Binds table name to query
@@ -472,14 +508,11 @@ abstract class AbstractMySQLQueue<E> extends AbstractBlockingQueue<E> implements
 	 * @return
 	 * @throws SQLException
 	 */
-	protected ValueContainer<E> valueContainerFromResult(ResultSet rs) throws SQLException {
-		//id, status, priority, value 
-		return new ValueContainer<E>(
-				rs.getLong(1),
-				rs.getString(2),
-				rs.getLong(3),
-				getValueFromResult(rs, 4)
-				);
+	protected ValueContainer<E> valueContainerFromResult(ResultSet rs)
+			throws SQLException {
+		// id, status, priority, value
+		return new ValueContainer<E>(rs.getLong(1), rs.getString(2),
+				rs.getLong(3), getValueFromResult(rs, 4));
 	}
 
 	/**
